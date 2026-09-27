@@ -1,10 +1,15 @@
 # Testing oPKGui
 
-**v0 (read-only) confirmed working end-to-end on the user's real NAS.** v1 (install/remove/
-upgrade) is built and rebuilt but **not yet install-tested**. Self-contained Go service,
-built through SynoCommunity's actual `spksrc` framework, all privilege grants done via DSM
-Task Scheduler rather than from the package itself. See DESIGN.md's "Round 1–6" notes for
-the full decision trail.
+**v0 and v1 both confirmed working end-to-end on the user's real NAS**, including a real
+install (`opkg install cal`) through the web UI. Self-contained Go service, built through
+SynoCommunity's actual `spksrc` framework, all privilege grants done via DSM Task Scheduler
+rather than from the package itself. See DESIGN.md's "Round 1–7" notes for the full decision
+trail.
+
+**Task Scheduler's "Run command" box handles multi-line scripts fine** — paste the whole
+script, comments and all, directly into it. (A round of confusion happened here purely
+because of a tool-display miss on the agent's side, not any real limitation of that field —
+see the v1 log entry below. No indirection through a separate script file is needed.)
 
 ## Build
 
@@ -87,8 +92,20 @@ First run clones `spksrc` (shallow, gitignored at `.spksrc/`) and pulls
   `sudoers.d` rule (`sc-opkgui` may run exactly `opkg install/remove/upgrade <arg>` as root,
   nothing else) instead of trying to get the package itself any privilege — DSM 7 already
   established (round 5) that it won't allow that. Package names are validated twice before
-  ever reaching `sudo`: a regex, then cross-checked against opkg's own current listing. Not
-  yet tested against a real install/remove/upgrade on the NAS — that's the next step.
+  ever reaching `sudo`: a regex, then cross-checked against opkg's own current listing.
+- **v1, first real test:** hit a lock-contention bug first (all three tabs fetching
+  concurrently on page load raced for `opkg`'s own lock file, ~2/3 failing with a 255) —
+  fixed with a mutex serializing every `opkg`/`sudo` call in the Go server. Then the actual
+  sudoers grant didn't take effect (`sudo: a password is required` trying to install `cal`).
+  Turned out the agent had called a tool to `cat` the script into chat rather than writing
+  its content directly into the reply, so nothing was ever actually shown to copy — but this
+  got misdiagnosed as a DSM Task Scheduler UI limitation (multi-line paste not working in
+  the "Run command" field) instead of being recognized as the agent's own display miss,
+  leading to an unnecessary workaround (writing the script to a file on the NAS and pointing
+  Task Scheduler at it with `sh /path/to/script.sh`) before the user corrected this directly:
+  **the Run command field handles a full multi-line script pasted in as-is, no indirection
+  needed.** Once the actual script was in there, `opkg install cal` worked immediately —
+  confirmed via SSH (`/opt/bin/cal` present) and in the web UI's Installed tab.
 
 ## What's next (v2?)
 

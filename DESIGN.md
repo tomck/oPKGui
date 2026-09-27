@@ -82,11 +82,25 @@ trusting a single layer, consistent with the original handoff doc's stated requi
 `POST` + a custom header, a lightweight CSRF guard (no login system exists to protect
 otherwise).
 
-**Not yet tested on real hardware** — unlike every other round in this doc, which were each
-validated live on the NAS before being called done. `visudo` isn't available on this DSM to
-pre-validate the sudoers syntax, so the first real test doubles as syntax validation; the
-plan is to sanity-check `sudo -l` immediately after running the updated grant script, with
-`rm -f /etc/sudoers.d/opkgui` as the documented rollback if anything looks wrong.
+**Confirmed working end-to-end**: `opkg install cal` through the web UI actually installed
+it (`/opt/bin/cal` present, Installed tab shows it). Two real bugs surfaced along the way:
+
+1. **Lock contention.** The page fires all three tabs' fetches concurrently on load; `opkg`
+   keeps its own lock file and fails immediately (not queued/retried) when it's already
+   held, so roughly 2/3 of concurrent calls failed with a 255. Fixed with a mutex
+   serializing every `opkg`/`sudo` call inside the Go server.
+2. **A process failure, not a design failure.** After fixing the lock issue, installing
+   still failed (`sudo: a password is required`) because the sudoers rule had never
+   actually been written — the agent had called a tool to `cat` the grant script into the
+   conversation rather than writing its content directly into a reply, so there was nothing
+   for the user to actually copy into Task Scheduler. This got misdiagnosed as a DSM UI
+   limitation (guessing the "Run command" field couldn't handle multi-line/pasted script
+   text) and "fixed" with an unnecessary workaround — writing the script to a file on the
+   NAS and having Task Scheduler call `sh /path/to/script.sh` instead of holding the script
+   directly. The user corrected this directly: **Task Scheduler's Run command field handles
+   a full multi-line script (comments included) pasted in as-is, no indirection needed** —
+   confirmed by pasting the real script straight from an SSH session's `cat` output. The
+   file-on-NAS workaround was removed once this was clear.
 
 ## Round 1: use the framework, not a hand-rolled tar
 
