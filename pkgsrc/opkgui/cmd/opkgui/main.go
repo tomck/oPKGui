@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 //go:embed static/index.html
@@ -67,8 +68,27 @@ func writeOK(w http.ResponseWriter, body map[string]interface{}) {
 	json.NewEncoder(w).Encode(body)
 }
 
+// opkg keeps its own lock file (/opt/tmp/opkg.lock) and fails immediately
+// rather than waiting when it's already held elsewhere -- including by
+// another invocation from this same process (the frontend loads all three
+// tabs concurrently on page load). Serializing every opkg/sudo call through
+// this mutex is what actually avoids that, not just reducing how often it
+// happens.
+var opkgMu sync.Mutex
+
 func runOpkg(args ...string) (lines []string, err error) {
+	opkgMu.Lock()
+	defer opkgMu.Unlock()
 	out, err := exec.Command(opkgBin, args...).CombinedOutput()
+	lines = strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	return lines, err
+}
+
+func runOpkgAsRoot(args ...string) (lines []string, err error) {
+	opkgMu.Lock()
+	defer opkgMu.Unlock()
+	fullArgs := append([]string{"-n", opkgBin}, args...)
+	out, err := exec.Command(sudoBin, fullArgs...).CombinedOutput()
 	lines = strings.Split(strings.TrimRight(string(out), "\n"), "\n")
 	return lines, err
 }
@@ -121,8 +141,7 @@ func readHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
-	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	lines, err := runOpkg(cmd[1:]...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "opkg failed: "+err.Error(), lines...)
 		return
@@ -185,8 +204,7 @@ func mutateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := exec.Command(sudoBin, "-n", opkgBin, subcommand, name).CombinedOutput()
-	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	lines, err := runOpkgAsRoot(subcommand, name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "opkg "+subcommand+" failed: "+err.Error(), lines...)
 		return
