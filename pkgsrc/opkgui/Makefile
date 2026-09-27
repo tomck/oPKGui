@@ -13,9 +13,9 @@ DEPENDS =
 override ARCH=noarch
 
 MAINTAINER = tomkoch
-DESCRIPTION = Read-only browser for installed Entware (opkg) packages and available updates.
+DESCRIPTION = Browse, install, remove and upgrade Entware (opkg) packages.
 DISPLAY_NAME = oPKGui
-CHANGELOG = "v0: read-only package list, self-contained service (no WebStation dependency)"
+CHANGELOG = "v1: install/remove/upgrade, system-command-conflict warnings"
 
 LICENSE = MIT
 

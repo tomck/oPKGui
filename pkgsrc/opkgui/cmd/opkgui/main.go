@@ -68,6 +68,73 @@ func systemHasCommand(name string) bool {
 	return false
 }
 
+// entwareArchFor maps `uname -m` to Entware's own install-script naming
+// scheme (https://github.com/entware/entware/wiki/Install-on-Synology-NAS)
+// -- confirmed live: architecture alone determines the URL, not the
+// specific Synology platform/model.
+type entwareArch struct {
+	label        string
+	installerURL string
+}
+
+var entwareArchFor = map[string]entwareArch{
+	"x86_64":   {"x64", "https://bin.entware.net/x64-k3.2/installer/generic.sh"},
+	"aarch64":  {"aarch64", "https://bin.entware.net/aarch64-k3.10/installer/generic.sh"},
+	"armv7l":   {"armv7", "https://bin.entware.net/armv7sf-k3.2/installer/generic.sh"},
+	"armv5tel": {"armv5", "https://bin.entware.net/armv5sf-k3.2/installer/generic.sh"},
+}
+
+// entwareBootScript is Entware's own documented boot-time mount/init script,
+// verbatim from their install wiki -- not something we invented. Assumes
+// /volume1; the user may need to adjust this for their own setup.
+const entwareBootScript = `#!/bin/sh
+# Mount/Start Entware
+mkdir -p /opt
+mount -o bind "/volume1/@Entware/opt" /opt
+/opt/etc/init.d/rc.unslung start
+
+# Add Entware Profile in Global Profile
+if grep -qF '/opt/etc/profile' /etc/profile; then
+	echo "Confirmed: Entware Profile in Global Profile"
+else
+	echo "Adding: Entware Profile in Global Profile"
+cat >> /etc/profile <<"EOF"
+
+# Load Entware Profile
+[ -r "/opt/etc/profile" ] && . /opt/etc/profile
+EOF
+fi
+
+# Update Entware List
+/opt/bin/opkg update
+`
+
+// statusHandler reports whether opkg exists at all, and if not, everything
+// needed to bootstrap Entware: detected architecture (oPKGui can never do
+// this install itself -- it needs the same root access DSM blocks the
+// package from ever requesting, per DESIGN.md Round 5 -- so this only ever
+// guides the user, mirroring Entware's own documented steps).
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(opkgBin); err == nil {
+		writeOK(w, map[string]interface{}{"opkg_installed": true})
+		return
+	}
+
+	unameOut, _ := exec.Command("uname", "-m").CombinedOutput()
+	unameM := strings.TrimSpace(string(unameOut))
+
+	body := map[string]interface{}{
+		"opkg_installed": false,
+		"uname_m":        unameM,
+		"boot_script":    entwareBootScript,
+	}
+	if arch, ok := entwareArchFor[unameM]; ok {
+		body["arch"] = arch.label
+		body["install_cmd"] = "wget -O - " + arch.installerURL + " | /bin/sh"
+	}
+	writeOK(w, body)
+}
+
 type pkg struct {
 	Name       string `json:"name"`
 	Version    string `json:"version"`
@@ -260,6 +327,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(index)
 	})
+	mux.HandleFunc("/api/status", statusHandler)
 	mux.HandleFunc("/api", readHandler)
 	mux.HandleFunc("/api/action", mutateHandler)
 

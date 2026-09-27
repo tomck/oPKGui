@@ -57,6 +57,15 @@
   button.action.remove { background: var(--danger); }
   button.action:disabled { opacity: 0.5; cursor: default; }
   .row-msg { font-size: 11px; color: var(--muted); }
+  pre.script {
+    background: var(--stripe); border: 1px solid var(--border); border-radius: 4px;
+    padding: 10px 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  button.copy {
+    font-size: 12px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+    background: none; color: var(--fg); cursor: pointer; margin-bottom: 8px;
+  }
+  #onboarding h2 { font-size: 15px; margin: 20px 0 4px; }
 </style>
 </head>
 <body>
@@ -64,6 +73,17 @@
 <h1>oPKGui</h1>
 <p class="sub">Browse, install, remove and upgrade Entware (opkg) packages.</p>
 
+<div id="onboarding" style="display:none">
+  <div class="warning">
+    <strong>Entware isn't installed on this NAS</strong> (no <code>/opt/bin/opkg</code> found) --
+    oPKGui manages Entware packages, it doesn't replace installing Entware itself. That install
+    step needs root, which this package can never get on its own (see the project's design
+    notes) -- so here's what to run yourself, detected for your NAS's architecture.
+  </div>
+  <div id="onboarding-detail"><p class="empty">Detecting...</p></div>
+</div>
+
+<div id="main-ui" style="display:none">
 <div class="tabs">
   <button class="tab active" data-panel="installed" onclick="showPanel('installed', this)">Installed</button>
   <button class="tab" data-panel="upgradable" onclick="showPanel('upgradable', this)">Updates available</button>
@@ -83,6 +103,7 @@
   </div>
   <input type="text" class="search" placeholder="Filter by name..." oninput="filterAvailable(this.value)">
   <div id="available-list"><p class="empty">Loading...</p></div>
+</div>
 </div>
 
 <script>
@@ -196,9 +217,51 @@ function runAction(action, name, rowId) {
     });
 }
 
-load('installed', 'installed');
-load('upgradable', 'upgradable');
-load('available', 'available');
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
+function renderOnboarding(status) {
+  const el = document.getElementById('onboarding-detail');
+  if (!status.arch) {
+    el.innerHTML = '<p class="error">Couldn\'t recognize this NAS\'s architecture (' +
+      escapeHtml(status.uname_m || 'unknown') + '). Check ' +
+      '<a href="https://github.com/entware/entware/wiki/Install-on-Synology-NAS" target="_blank">' +
+      'Entware\'s install wiki</a> directly to find the right installer for your model.</p>';
+    return;
+  }
+  el.innerHTML =
+    '<p>Detected architecture: <span class="badge">' + escapeHtml(status.arch) + '</span> (from <code>uname -m</code> = ' + escapeHtml(status.uname_m) + ')</p>' +
+    '<h2>1. Install Entware (run once, over SSH, as root)</h2>' +
+    '<button class="copy" onclick="copyToClipboard(document.getElementById(\'install-cmd\').textContent, this)">Copy</button>' +
+    '<pre class="script" id="install-cmd">' + escapeHtml(status.install_cmd) + '</pre>' +
+    '<h2>2. Mount Entware on every boot (Control Panel &rarr; Task Scheduler &rarr; Create &rarr; Triggered Task &rarr; User-defined script, User: root, Event: Boot-up -- paste this in, then run it once now too)</h2>' +
+    '<button class="copy" onclick="copyToClipboard(document.getElementById(\'boot-script\').textContent, this)">Copy</button>' +
+    '<pre class="script" id="boot-script">' + escapeHtml(status.boot_script) + '</pre>' +
+    '<p class="row-msg">Both steps are from <a href="https://github.com/entware/entware/wiki/Install-on-Synology-NAS" target="_blank">Entware\'s own install docs</a> -- oPKGui just filled in the architecture. Reload this page once Entware is set up.</p>';
+}
+
+fetch('/api/status')
+  .then(r => r.json())
+  .then(status => {
+    if (status.opkg_installed) {
+      document.getElementById('main-ui').style.display = '';
+      load('installed', 'installed');
+      load('upgradable', 'upgradable');
+      load('available', 'available');
+    } else {
+      document.getElementById('onboarding').style.display = '';
+      renderOnboarding(status);
+    }
+  })
+  .catch(err => {
+    document.getElementById('onboarding').style.display = '';
+    document.getElementById('onboarding-detail').innerHTML = '<p class="error">' + escapeHtml(String(err)) + '</p>';
+  });
 </script>
 
 </body>
