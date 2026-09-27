@@ -10,7 +10,7 @@
             "backend": 2,
             "php": {
                "profile_name": "oPKGui PHP Profile",
-               "profile_desc": "PHP profile for oPKGui",
+               "profile_desc": "PHP 8.2 profile for oPKGui",
                "backend": 11,
                "extensions": [],
                "user": "sc-opkgui",

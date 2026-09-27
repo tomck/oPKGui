@@ -1,2 +1,4 @@
 /build/
 *.spk
+.spksrc/
+dist/

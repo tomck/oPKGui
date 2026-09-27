@@ -51,17 +51,31 @@ verified during real testing on the user's NAS, not before.**
   so DSM's variable substitution still applies) that fetches `api.php` and renders two
   tables: installed packages, and packages with available updates. No install/remove
   buttons in v0.
-- **Packaging:** built by hand (a small shell script, `build-spk.sh`) that assembles the
-  `.spk` tar structure directly, rather than depending on cloning the full `spksrc`
-  monorepo and its cross-compilation framework. This matches the project's distribution
-  strategy ([[feedback_distribution_strategy]] in memory — self-host first,
-  `spksrc`-framework adoption is a later reach decision, not a v0 dependency) and keeps the
-  build lightweight since `noarch` doesn't need `spksrc`'s toolchain anyway.
+- **Packaging:** built through SynoCommunity's actual `spksrc` framework (via their
+  published `ghcr.io/synocommunity/spksrc` Docker image), not hand-assembled. `pkgsrc/opkgui/`
+  holds the package source (a `Makefile` modeled directly on `spksrc`'s own
+  `demowebservice` reference package); `build.sh` clones `spksrc` into a gitignored
+  `.spksrc/`, syncs `pkgsrc/opkgui` into its `spk/opkgui`, and runs `make` inside the
+  container. This is a course-correction from the original v0 approach — see the
+  round-1 note below.
 - **Testing loop:** manual sideload via DSM's Package Center → Manual Install, pointing at
-  the built `.spk` file. No package-source hosting needed yet for this stage.
+  the built `.spk` file in `dist/`. No package-source hosting needed yet for this stage.
+
+## Round 1 correction: use the framework, not a hand-rolled tar
+
+The first v0 attempt hand-assembled the `.spk` tar structure directly instead of using
+`spksrc`, reasoning that a pure-`noarch`-PHP package didn't need the cross-compilation
+toolchain. That reasoning wasn't wrong on its own terms, but it repeated exactly the
+mistake this project already knows to avoid elsewhere ([[SynoVPNSocks]] uses Entware/`opkg`
+instead of reinventing package management) — `spksrc` isn't just a cross-compiler, it's
+accumulated knowledge of DSM packaging pitfalls (like the `conf/privilege` requirement that
+blocked the first hand-built attempt outright: "Unable to install because it runs with root
+privileges"). Distribution strategy (self-host vs. submit to SynoCommunity) and build
+tooling (use `spksrc`'s Makefiles vs. not) are separate decisions — using the framework
+locally to produce a `.spk` doesn't commit us to ever submitting it upstream. Switched to
+building through the real framework from this point on.
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.
 - No architecture-detection logic beyond "does `/opt/bin/opkg` exist."
-- No attempt to replicate `spksrc`'s full build framework.
