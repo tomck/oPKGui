@@ -27,6 +27,12 @@ SERVICE_SETUP = src/service-setup.sh
 SERVICE_PORT = 18890
 ADMIN_PORT = $(SERVICE_PORT)
 SERVICE_PORT_TITLE = oPKGui (HTTP)
+# Tried getting a true embedded DSM desktop window (SERVICE_TYPE=legacy,
+# and a hand-authored SYNO.SDS._ThirdParty.App.* + appWindow config
+# modeled on a real working example) -- neither worked cleanly, see
+# DESIGN.md's "DSM desktop window" note. Back to the default (type: url):
+# a normal Main Menu icon that opens in a new tab, same as every other
+# third-party Package Center app.
 
 COPY_TARGET = opkgui_install
 

@@ -149,6 +149,41 @@ service start, permission grant, both the Installed and Updates-available tabs p
 correctly (the latter briefly errored once right after the permissions fix, most likely a
 transient race with the grant script's `Run`, and resolved on its own by the next request).
 
+## Round 6: DSM desktop window (post-v0 exploration, reverted)
+
+The user wanted oPKGui to feel like a real DSM desktop app rather than "a separate webapp on
+a port" — clicking an icon and getting a window inside DSM's own interface, not a new browser
+tab. Investigated whether this is achievable at all for our architecture (a standalone Go
+service on its own port, not CGI, not behind WebStation).
+
+Found `spksrc`'s `app/config` schema supports `"type": "legacy"` as an alternative to the
+default `"type": "url"`, and found a real working example — [MODS Web Console](https://github.com/vletroye/SynoPackages/tree/master/DSM%207.x/MODS%20Web%20Console%207.x),
+a genuinely third-party, embedded-in-a-DSM-window webapp — to model it on. Three escalating
+experiments, each tested live on the real NAS:
+
+1. **`SERVICE_TYPE = legacy`, default URL (`/`).** Got further than expected — DSM did show
+   an "Open" button and let the icon be added to the desktop. But the window it opened
+   reloaded DSM's own root page inside itself ("nested DSM"), not oPKGui.
+2. **Same, with a fully-qualified URL** (`http://<nas-ip>:18890/`) baked into the config,
+   theorizing `legacy` used the `url` field as a literal iframe target and ignored the
+   separate `protocol`/`port` fields (consistent with a bare `/` loading DSM's own root).
+   Identical nesting result — ruled that theory out.
+3. **Hand-authored config matching MODS's exact proven shape**: an id in the
+   `SYNO.SDS._ThirdParty.App.*` namespace plus a matching `appWindow` key (neither of which
+   `spksrc`'s generic template generates at all). This *regressed*: no icon, no Open button,
+   nothing in the Main Menu — worse than either previous attempt, despite matching the JSON
+   shape of a package that's confirmed to work.
+
+Conclusion: DSM's `legacy`/`appWindow` third-party desktop-window mechanism almost certainly
+needs more than JSON config — MODS's own tool is a substantial Windows app that likely
+registers additional client-side plumbing we don't have and haven't identified, and/or
+depends on same-origin serving through DSM's own web server (WebStation or raw CGI, both of
+which we deliberately moved away from in Round 2 and Round 5's underlying reasoning). Not
+pursuing further for now: the cost of continuing to guess outweighs the payoff, and the
+result of chasing it was getting *worse*, not closer. **Reverted to the default `"type":
+"url"` config** — a normal Main Menu icon that opens the app in a new tab, which is also how
+other third-party Package Center webapps (Sonarr, Transmission, etc.) actually behave.
+
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.
