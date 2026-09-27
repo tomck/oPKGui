@@ -4,8 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>oPKGui</title>
-<link rel="icon" type="image/png" href="./images/opkgui-16.png" sizes="16x16">
-<link rel="icon" type="image/png" href="./images/opkgui-32.png" sizes="32x32">
 <style>
   :root {
     color-scheme: light dark;
@@ -62,6 +60,10 @@ function showPanel(name, btn) {
   btn.classList.add('active');
 }
 
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function render(panelId, packages, kind) {
   const el = document.getElementById(panelId);
   if (!packages.length) {
@@ -70,9 +72,9 @@ function render(panelId, packages, kind) {
   }
   let rows = packages.map(p => {
     if (kind === 'upgradable') {
-      return '<tr><td>' + p.name + '</td><td>' + p.version + '</td><td><span class="badge">' + p.new_version + '</span></td></tr>';
+      return '<tr><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td><td><span class="badge">' + escapeHtml(p.new_version) + '</span></td></tr>';
     }
-    return '<tr><td>' + p.name + '</td><td>' + p.version + '</td></tr>';
+    return '<tr><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td></tr>';
   }).join('');
   let header = kind === 'upgradable'
     ? '<tr><th>Package</th><th>Installed</th><th>Available</th></tr>'
@@ -81,17 +83,17 @@ function render(panelId, packages, kind) {
 }
 
 function load(panelId, action) {
-  fetch('api.php?action=' + action)
+  fetch('/api?action=' + action)
     .then(r => r.json().then(body => ({ ok: r.ok, body })))
     .then(({ ok, body }) => {
       if (!ok) {
-        document.getElementById(panelId).innerHTML = '<p class="error">' + (body.error || 'request failed') + '</p>';
+        document.getElementById(panelId).innerHTML = '<p class="error">' + escapeHtml(body.error || 'request failed') + '</p>';
         return;
       }
       render(panelId, body.packages, action);
     })
     .catch(err => {
-      document.getElementById(panelId).innerHTML = '<p class="error">' + err + '</p>';
+      document.getElementById(panelId).innerHTML = '<p class="error">' + escapeHtml(String(err)) + '</p>';
     });
 }
 

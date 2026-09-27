@@ -2,3 +2,4 @@
 *.spk
 .spksrc/
 dist/
+pkgsrc/opkgui/src/bin/
