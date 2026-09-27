@@ -69,6 +69,12 @@ First run clones `spksrc` (shallow, gitignored at `.spksrc/`) and pulls
   reconstructed from documentation alone. The privilege file is kept in the new package too
   (`pkgsrc/opkgui/src/conf_php8.2/privilege`) since it's harmless and documented, just no
   longer assumed to be the whole fix.
-- **v0, round 2 (spksrc-built):** not yet tested on real hardware.
+- **v0, round 2 (spksrc-built):** first build attempt failed inside the framework itself
+  (`install: cannot stat '.../app/images/opkgui-16.png'`) — `DSM_UI_DIR`/`DSM_UI_CONFIG` had
+  been dropped from the Makefile, not realizing `spksrc`'s icon generation (`mk/spksrc.spk/icon.mk`)
+  is gated on those being set, independent of the app-shortcut feature they otherwise control.
+  Fixed by keeping both set (matching `demowebservice`) and adding `src/app/config`. Build now
+  completes cleanly; produced `dist/opkgui_noarch-dsm72_0.1.0-1.spk` with framework-generated
+  `INFO`/checksum and correctly structured `package.tgz`. Not yet tested on real hardware.
 
 Report back whatever DSM actually says/does and we'll iterate from there.
