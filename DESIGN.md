@@ -47,13 +47,13 @@ wrong on the user's real NAS (see "Round 3" below) — but the mutation problem
   holds the package source; `build.sh` cross-compiles the Go binary, clones `spksrc` into a
   gitignored `.spksrc/`, syncs `pkgsrc/opkgui` into its `spk/opkgui`, and runs `make` inside
   the container.
-- **Privilege model:** `conf/privilege` declares `defaults.run-as: package` (the running
-  service is unprivileged, as `sc-opkgui`) with `ctrl-script` overrides making only the
-  install/uninstall/upgrade lifecycle scripts run as root — modeled directly on real
-  `spksrc` packages (`dnscrypt-proxy`, `ntopng`, `saltpad`) that need the same split. The
-  root-run `postinst` grants `sc-opkgui` group-read access to Entware's `opkg.conf` and
-  `status` files (`chown root:sc-opkgui` + `chmod 640`); `postuninst` reverts it. See
-  "Round 3" for why this is needed at all.
+- **Privilege model:** `conf/privilege` declares `defaults.run-as: package` only — no
+  `ctrl-script` overrides at all. The package requests zero root access, anywhere. The
+  read-access grant this service needs onto Entware's `opkg.conf`/`status` is done entirely
+  *outside* the package instead, via a DSM Task Scheduler root script
+  (`opkgui-grant-permissions.sh`), the same mechanism Entware itself is bootstrapped with.
+  See "Round 5" for why the original `ctrl-script`-root design (modeled on `dnscrypt-proxy`/
+  `ntopng`/`saltpad`) had to be abandoned.
 - **Noarch caveat:** packaged as `override ARCH=noarch` even though the binary is real
   x86_64 — see "Round 4." This means DSM won't block installing on a non-x86_64 model at
   the Package Center level (it would just fail to start there, wrong binary format). Fine
@@ -110,6 +110,44 @@ had only ~5.4GB free at the time, which made further toolchain-download attempts
 trade for what's currently solo testing on one confirmed-working machine. Decided (with the
 user) to ship as `noarch` for now and revisit real per-arch packaging only if this is ever
 distributed beyond the user's own NAS.
+
+## Round 5: DSM 7 blocks root ctrl-scripts for unsigned packages, full stop
+
+The `dnscrypt-proxy`/`ntopng`/`saltpad`-style `conf/privilege` (unprivileged service,
+`ctrl-script` root override for install/uninstall/upgrade only) kept failing Manual Install
+with the same "Unable to install because it runs with root privileges" error round 1 hit —
+even with a syntactically valid, narrowly-scoped privilege file. DSM 6 had a Package Center
+"Trust Level" setting that could be loosened to "Any publisher" for exactly this kind of
+sideloaded package; **DSM 7 removed that setting entirely** (confirmed both by the user's
+own Package Center UI, which has no such option, and independently via search). The working
+theory: those packages' `ctrl-script` root requests are only honored because they're
+installed through SynoCommunity's own signed repository — an unsigned, manually sideloaded
+`.spk` can't get root for *any* script, no matter how narrowly it's scoped in
+`conf/privilege`.
+
+Confirmed empirically: stripped `ctrl-script` out entirely (pure `defaults.run-as: package`,
+zero root requests) and that version installed and ran cleanly. So the permission grant
+can't live in the package at all under this distribution model (self-hosted/sideloaded,
+not going through SynoCommunity's signed repo — see [[feedback-distribution-strategy]]).
+
+The user's fix: this is exactly the situation Entware's own bootstrap is already in —
+Entware isn't a signed package either, so [its own install instructions](https://github.com/entware/entware/wiki/Install-on-Synology-NAS)
+use a DSM Task Scheduler "Triggered Task → User-defined script" (User: root, Event:
+Boot-up) to get root access outside Package Center's signing model entirely. oPKGui now
+does the same thing for its one root-requiring step: `opkgui-grant-permissions.sh` is a
+standalone script (not part of the `.spk`) that the user adds as a root Task Scheduler
+task, doing the `chown`/`chmod` grant Round 3 originally tried to do from `postinst`.
+
+One gotcha hit setting this up: DSM's `SERVICE_USER=auto` created the account `sc-opkgui`
+but its **group** is just `opkgui` (no `sc-` prefix) — confirmed via `id sc-opkgui` on the
+test NAS. `chown root:sc-opkgui` silently failed (nonexistent group) while the `chmod 640`
+in the same script succeeded independently, which briefly looked like a partial fix. Fixed
+by using `opkgui` as the group name.
+
+**v0 confirmed fully working end-to-end** on the user's real NAS after this: install,
+service start, permission grant, both the Installed and Updates-available tabs populate
+correctly (the latter briefly errored once right after the permissions fix, most likely a
+transient race with the grant script's `Run`, and resolved on its own by the next request).
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 

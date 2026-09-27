@@ -1,15 +1,6 @@
 {
-    "_comment": "Root needed only at install/uninstall/upgrade time, to grant the package's own unprivileged service account (sc-opkgui) read-only group access to Entware's opkg.conf and package status file, both 600 root:root by default. The running service itself stays unprivileged (defaults.run-as: package) -- it never needs root.",
     "defaults": {
         "run-as": "package"
     },
-    "username": "sc-opkgui",
-    "ctrl-script": [
-        { "action": "preinst", "run-as": "root" },
-        { "action": "postinst", "run-as": "root" },
-        { "action": "preuninst", "run-as": "root" },
-        { "action": "postuninst", "run-as": "root" },
-        { "action": "preupgrade", "run-as": "root" },
-        { "action": "postupgrade", "run-as": "root" }
-    ]
+    "username": "sc-opkgui"
 }
