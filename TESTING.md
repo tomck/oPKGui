@@ -1,9 +1,10 @@
-# Testing oPKGui v0
+# Testing oPKGui
 
-**Status: confirmed working end-to-end on the user's real NAS.** Self-contained Go service,
-built through SynoCommunity's actual `spksrc` framework, permission grant done via DSM Task
-Scheduler rather than from the package itself. See DESIGN.md's "Round 1–5" notes for the
-full decision trail.
+**v0 (read-only) confirmed working end-to-end on the user's real NAS.** v1 (install/remove/
+upgrade) is built and rebuilt but **not yet install-tested**. Self-contained Go service,
+built through SynoCommunity's actual `spksrc` framework, all privilege grants done via DSM
+Task Scheduler rather than from the package itself. See DESIGN.md's "Round 1–6" notes for
+the full decision trail.
 
 ## Build
 
@@ -28,22 +29,31 @@ First run clones `spksrc` (shallow, gitignored at `.spksrc/`) and pulls
 4. **Package Center → Installed** should show "oPKGui", running on port `18890` — try
    `http://<nas-ip>:18890/` directly. At this point both tabs will show a permission error
    (expected — see next step).
-5. Set up the one-time permission grant via **Control Panel → Task Scheduler → Create →
-   Triggered Task → User-defined script**:
-   - General tab: Task name `oPKGui permissions`, User: **root**
-   - Schedule tab: Event = **Boot-up**
-   - Task Settings tab → Run command: paste the contents of
-     `pkgsrc/opkgui/opkgui-grant-permissions.sh`
-   - Save, then right-click the task and **Run** once immediately (don't wait for a reboot)
-6. Refresh the page — both tabs should now show real data.
+5. Set up (or update) the permission grant via **Control Panel → Task Scheduler**:
+   - If you already have the `oPKGui permissions` task from v0: edit it, replace the Run
+     command with the current contents of `pkgsrc/opkgui/opkgui-grant-permissions.sh`
+     (v1 adds a `sudoers.d` rule to the same script), save, right-click → **Run**.
+   - If not: **Create → Triggered Task → User-defined script** — General tab: Task name
+     `oPKGui permissions`, User: **root**; Schedule tab: Event = **Boot-up**; Task Settings
+     tab → Run command: paste the script contents. Save, then right-click → **Run** once
+     immediately (don't wait for a reboot).
+   - **This edits `/etc/sudoers.d/opkgui` system-wide.** Right after running it, sanity-check
+     with `sudo -l` (as your own admin user, over SSH) that sudo still works normally at all
+     — a malformed sudoers file can break sudo entirely. Rollback if anything looks wrong:
+     `rm -f /etc/sudoers.d/opkgui` (as root).
+6. Refresh the page — all three tabs should now show real data, and Install/Remove/Upgrade
+   buttons should work.
 
-## What "success" looks like for v0
+## What "success" looks like
 
-- Two tabs: **Installed** (all `opkg`-managed packages) and **Updates available**.
+- Three tabs: **Installed** (with Remove buttons), **Updates available** (with Upgrade
+  buttons), **Available** (all Entware packages, with a name filter and Install buttons).
 - If Entware isn't installed, or lives somewhere other than `/opt`, you should see a clean
   error message rather than a crash.
 - `ls -la /opt/etc/opkg.conf /opt/lib/opkg/status` should show `640 root:opkgui` after the
   Task Scheduler grant runs (group is `opkgui`, **not** `sc-opkgui` — see round 5 below).
+- Installing/removing/upgrading a package via the buttons should actually change what
+  `opkg list-installed` reports, reflected in the Installed tab after the action completes.
 
 ## Iteration log
 
@@ -72,11 +82,16 @@ First run clones `spksrc` (shallow, gitignored at `.spksrc/`) and pulls
   succeeded, briefly looking like a partial fix. Fixed the group name and confirmed both
   tabs populate correctly on the real NAS.
 
-## What's next (v1)
+- **v0 → v1:** Added install/remove/upgrade. The privilege boundary uses the same
+  Task-Scheduler-as-root pattern as the read-only permission grant, extended with a narrow
+  `sudoers.d` rule (`sc-opkgui` may run exactly `opkg install/remove/upgrade <arg>` as root,
+  nothing else) instead of trying to get the package itself any privilege — DSM 7 already
+  established (round 5) that it won't allow that. Package names are validated twice before
+  ever reaching `sudo`: a regex, then cross-checked against opkg's own current listing. Not
+  yet tested against a real install/remove/upgrade on the NAS — that's the next step.
 
-- The install/remove privilege boundary — still the one genuinely open, harder problem;
-  the Task Scheduler pattern used here for a one-time permission grant doesn't obviously
-  extend to arbitrary mutating `opkg` commands from a web request.
+## What's next (v2?)
+
 - Packaging this as a self-hosted Package Center source (a JSON feed + hosted `.spk`) for
   reinstall/updates without manual sideload.
 - The `noarch` architecture-metadata gap (DESIGN.md Round 4) before any distribution beyond

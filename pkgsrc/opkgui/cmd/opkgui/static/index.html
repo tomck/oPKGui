@@ -8,9 +8,10 @@
   :root {
     color-scheme: light dark;
     --bg: #fff; --fg: #1a1a1a; --muted: #666; --border: #ddd; --accent: #3a6ea5; --stripe: #f7f7f7;
+    --danger: #c0392b;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #1e1e1e; --fg: #eee; --muted: #999; --border: #3a3a3a; --accent: #6ea8dc; --stripe: #262626; }
+    :root { --bg: #1e1e1e; --fg: #eee; --muted: #999; --border: #3a3a3a; --accent: #6ea8dc; --stripe: #262626; --danger: #e0685c; }
   }
   * { box-sizing: border-box; }
   body {
@@ -26,31 +27,48 @@
   }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   tr:nth-child(even) { background: var(--stripe); }
   th { color: var(--muted); font-weight: 600; }
   .empty, .error { color: var(--muted); padding: 20px 0; font-size: 13px; }
-  .error { color: #c0392b; }
+  .error { color: var(--danger); }
   .badge {
     display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px;
     background: var(--accent); color: #fff;
   }
+  .desc { color: var(--muted); }
   .panel { display: none; }
   .panel.active { display: block; }
+  .search {
+    width: 100%; padding: 6px 10px; margin-bottom: 12px; font-size: 13px;
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px;
+  }
+  button.action {
+    font-size: 12px; padding: 3px 10px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.action.remove { background: var(--danger); }
+  button.action:disabled { opacity: 0.5; cursor: default; }
+  .row-msg { font-size: 11px; color: var(--muted); }
 </style>
 </head>
 <body>
 
 <h1>oPKGui</h1>
-<p class="sub">Read-only view of Entware (opkg) packages. v0 -- no install/remove yet.</p>
+<p class="sub">Browse, install, remove and upgrade Entware (opkg) packages.</p>
 
 <div class="tabs">
   <button class="tab active" data-panel="installed" onclick="showPanel('installed', this)">Installed</button>
   <button class="tab" data-panel="upgradable" onclick="showPanel('upgradable', this)">Updates available</button>
+  <button class="tab" data-panel="available" onclick="showPanel('available', this)">Available</button>
 </div>
 
 <div id="installed" class="panel active"><p class="empty">Loading...</p></div>
 <div id="upgradable" class="panel"><p class="empty">Loading...</p></div>
+<div id="available" class="panel">
+  <input type="text" class="search" placeholder="Filter by name..." oninput="filterAvailable(this.value)">
+  <div id="available-list"><p class="empty">Loading...</p></div>
+</div>
 
 <script>
 function showPanel(name, btn) {
@@ -61,44 +79,103 @@ function showPanel(name, btn) {
 }
 
 function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+let availablePackages = [];
 
 function render(panelId, packages, kind) {
   const el = document.getElementById(panelId);
   if (!packages.length) {
-    el.innerHTML = '<p class="empty">' + (kind === 'upgradable' ? 'Everything is up to date.' : 'No packages found.') + '</p>';
+    const msg = { upgradable: 'Everything is up to date.', installed: 'No packages found.', available: 'No packages found.' }[kind];
+    el.innerHTML = '<p class="empty">' + msg + '</p>';
     return;
   }
   let rows = packages.map(p => {
+    const id = 'row-' + kind + '-' + p.name.replace(/[^a-zA-Z0-9_-]/g, '_');
     if (kind === 'upgradable') {
-      return '<tr><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td><td><span class="badge">' + escapeHtml(p.new_version) + '</span></td></tr>';
+      return '<tr id="' + id + '"><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td>' +
+        '<td><span class="badge">' + escapeHtml(p.new_version) + '</span></td>' +
+        '<td><button class="action" onclick="runAction(\'upgrade\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Upgrade</button></td></tr>';
     }
-    return '<tr><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td></tr>';
+    if (kind === 'available') {
+      return '<tr id="' + id + '"><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td>' +
+        '<td class="desc">' + escapeHtml(p.desc || '') + '</td>' +
+        '<td><button class="action" onclick="runAction(\'install\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Install</button></td></tr>';
+    }
+    return '<tr id="' + id + '"><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td>' +
+      '<td><button class="action remove" onclick="runAction(\'remove\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Remove</button></td></tr>';
   }).join('');
-  let header = kind === 'upgradable'
-    ? '<tr><th>Package</th><th>Installed</th><th>Available</th></tr>'
-    : '<tr><th>Package</th><th>Version</th></tr>';
+  let header = {
+    upgradable: '<tr><th>Package</th><th>Installed</th><th>Available</th><th></th></tr>',
+    available: '<tr><th>Package</th><th>Version</th><th>Description</th><th></th></tr>',
+    installed: '<tr><th>Package</th><th>Version</th><th></th></tr>',
+  }[kind];
   el.innerHTML = '<table><thead>' + header + '</thead><tbody>' + rows + '</tbody></table>';
 }
 
+function filterAvailable(query) {
+  const q = query.trim().toLowerCase();
+  const filtered = q ? availablePackages.filter(p => p.name.toLowerCase().includes(q)) : availablePackages;
+  render('available-list', filtered, 'available');
+}
+
 function load(panelId, action) {
+  const target = panelId === 'available' ? 'available-list' : panelId;
   fetch('/api?action=' + action)
     .then(r => r.json().then(body => ({ ok: r.ok, body })))
     .then(({ ok, body }) => {
       if (!ok) {
-        document.getElementById(panelId).innerHTML = '<p class="error">' + escapeHtml(body.error || 'request failed') + '</p>';
+        document.getElementById(target).innerHTML = '<p class="error">' + escapeHtml(body.error || 'request failed') + '</p>';
         return;
       }
-      render(panelId, body.packages, action);
+      if (action === 'available') {
+        availablePackages = body.packages;
+        render(target, availablePackages, 'available');
+      } else {
+        render(target, body.packages, action);
+      }
     })
     .catch(err => {
-      document.getElementById(panelId).innerHTML = '<p class="error">' + escapeHtml(String(err)) + '</p>';
+      document.getElementById(target).innerHTML = '<p class="error">' + escapeHtml(String(err)) + '</p>';
+    });
+}
+
+function runAction(action, name, rowId) {
+  const verb = { install: 'Install', remove: 'Remove', upgrade: 'Upgrade' }[action];
+  if (!confirm(verb + ' "' + name + '"?')) return;
+
+  const row = document.getElementById(rowId);
+  const btn = row.querySelector('button.action');
+  btn.disabled = true;
+  btn.textContent = verb + '...';
+
+  fetch('/api/action?action=' + action + '&pkg=' + encodeURIComponent(name), {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  })
+    .then(r => r.json().then(body => ({ ok: r.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok) {
+        alert(verb + ' failed:\n' + (body.error || 'unknown error') + (body.output ? '\n' + body.output.join('\n') : ''));
+        btn.disabled = false;
+        btn.textContent = verb;
+        return;
+      }
+      load('installed', 'installed');
+      load('upgradable', 'upgradable');
+      if (action === 'install') load('available', 'available');
+    })
+    .catch(err => {
+      alert(verb + ' failed: ' + err);
+      btn.disabled = false;
+      btn.textContent = verb;
     });
 }
 
 load('installed', 'installed');
 load('upgradable', 'upgradable');
+load('available', 'available');
 </script>
 
 </body>

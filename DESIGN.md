@@ -62,6 +62,32 @@ wrong on the user's real NAS (see "Round 3" below) — but the mutation problem
 - **Testing loop:** manual sideload via DSM's Package Center → Manual Install, pointing at
   the built `.spk` file in `dist/`.
 
+## Round 7: install/remove/upgrade (v1)
+
+Extended the read-only v0 into a real package manager: an **Available** tab (`opkg list`,
+already reachable read-only since it only needs the already-world-readable
+`/opt/var/opkg-lists/entware` cache plus `opkg.conf` — no new permission needed beyond what
+Round 5 already granted) with Install buttons, and Install/Remove/Upgrade buttons on the
+other two tabs.
+
+The mutation privilege boundary uses the exact same escape hatch as Round 5's read grant —
+Task Scheduler running as root, since the package itself still can't request any privilege
+(that constraint didn't change). `opkgui-grant-permissions.sh` now also drops a narrow
+`/etc/sudoers.d/opkgui` rule: `sc-opkgui` may run `sudo -n /opt/bin/opkg install|remove|
+upgrade <arg>` as root, and nothing else. Defense in depth on top of that narrow grant: the
+Go backend validates any package name against a regex *and* cross-checks it against opkg's
+own current `list`/`list-installed` output before it's ever passed to `sudo`/`opkg` — never
+trusting a single layer, consistent with the original handoff doc's stated requirement
+("no free-text command construction from user input"). Mutating requests also require
+`POST` + a custom header, a lightweight CSRF guard (no login system exists to protect
+otherwise).
+
+**Not yet tested on real hardware** — unlike every other round in this doc, which were each
+validated live on the NAS before being called done. `visudo` isn't available on this DSM to
+pre-validate the sudoers syntax, so the first real test doubles as syntax validation; the
+plan is to sanity-check `sudo -l` immediately after running the updated grant script, with
+`rm -f /etc/sudoers.d/opkgui` as the documented rollback if anything looks wrong.
+
 ## Round 1: use the framework, not a hand-rolled tar
 
 The first v0 attempt hand-assembled the `.spk` tar structure directly instead of using
