@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>oPKGui</title>
+<link rel="icon" type="image/png" href="./images/opkgui-16.png" sizes="16x16">
+<link rel="icon" type="image/png" href="./images/opkgui-32.png" sizes="32x32">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fff; --fg: #1a1a1a; --muted: #666; --border: #ddd; --accent: #3a6ea5; --stripe: #f7f7f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1e1e1e; --fg: #eee; --muted: #999; --border: #3a3a3a; --accent: #6ea8dc; --stripe: #262626; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    margin: 0; padding: 24px; background: var(--bg); color: var(--fg);
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab {
+    padding: 8px 14px; cursor: pointer; border: none; background: none; color: var(--muted);
+    font-size: 14px; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  tr:nth-child(even) { background: var(--stripe); }
+  th { color: var(--muted); font-weight: 600; }
+  .empty, .error { color: var(--muted); padding: 20px 0; font-size: 13px; }
+  .error { color: #c0392b; }
+  .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px;
+    background: var(--accent); color: #fff;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<h1>oPKGui</h1>
+<p class="sub">Read-only view of Entware (opkg) packages. v0 -- no install/remove yet.</p>
+
+<div class="tabs">
+  <button class="tab active" data-panel="installed" onclick="showPanel('installed', this)">Installed</button>
+  <button class="tab" data-panel="upgradable" onclick="showPanel('upgradable', this)">Updates available</button>
+</div>
+
+<div id="installed" class="panel active"><p class="empty">Loading...</p></div>
+<div id="upgradable" class="panel"><p class="empty">Loading...</p></div>
+
+<script>
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function render(panelId, packages, kind) {
+  const el = document.getElementById(panelId);
+  if (!packages.length) {
+    el.innerHTML = '<p class="empty">' + (kind === 'upgradable' ? 'Everything is up to date.' : 'No packages found.') + '</p>';
+    return;
+  }
+  let rows = packages.map(p => {
+    if (kind === 'upgradable') {
+      return '<tr><td>' + p.name + '</td><td>' + p.version + '</td><td><span class="badge">' + p.new_version + '</span></td></tr>';
+    }
+    return '<tr><td>' + p.name + '</td><td>' + p.version + '</td></tr>';
+  }).join('');
+  let header = kind === 'upgradable'
+    ? '<tr><th>Package</th><th>Installed</th><th>Available</th></tr>'
+    : '<tr><th>Package</th><th>Version</th></tr>';
+  el.innerHTML = '<table><thead>' + header + '</thead><tbody>' + rows + '</tbody></table>';
+}
+
+function load(panelId, action) {
+  fetch('api.php?action=' + action)
+    .then(r => r.json().then(body => ({ ok: r.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok) {
+        document.getElementById(panelId).innerHTML = '<p class="error">' + (body.error || 'request failed') + '</p>';
+        return;
+      }
+      render(panelId, body.packages, action);
+    })
+    .catch(err => {
+      document.getElementById(panelId).innerHTML = '<p class="error">' + err + '</p>';
+    });
+}
+
+load('installed', 'installed');
+load('upgradable', 'upgradable');
+</script>
+
+</body>
+</html>
