@@ -224,6 +224,24 @@ result of chasing it was getting *worse*, not closer. **Reverted to the default 
 "url"` config** — a normal Main Menu icon that opens the app in a new tab, which is also how
 other third-party Package Center webapps (Sonarr, Transmission, etc.) actually behave.
 
+**Round 8 (later): one more lead, also closed.** A separate investigation (`~/Claude/DSMjs`)
+turned up `/usr/syno/synoman/webman/3rdparty/`, whose `README` (genuine Synology docs,
+copyright/version-stamped 2010) documents a completely different, older mechanism: a plain
+`key = value` `application.cfg` with `type = embedded` or `popup` and its own
+`protocol`/`address`/`port`/`path` fields — distinct from the JSON `app/config` scheme Round
+6 exhausted, and with an example that was almost exactly our use case (point at a service's
+own port, leave `address` unset so DSM fills in whatever host the admin is currently using,
+solving the earlier hardcoded-IP problem too). Shipped it (coexists fine alongside the
+framework's own auto-generated `app/config`/`app/opkgui.sc` — confirmed in the built
+package, different filenames, same directory) and tested live: **nothing rendered anywhere**
+in DSM 7 — not the Main Menu, not Control Panel, "Open" still just opened a new tab. The
+README's own language ("left frame of management UI," a tree-nav paradigm) describes a DSM
+version that predates the modern Desktop; the backend code reading this file evidently
+hasn't been fully retired, but nothing in DSM 7's frontend appears to render whatever it once
+fed. Reverted (`application.cfg` removed). **Not revisiting the embedded-window question
+again without a genuinely new, concrete lead** — three real mechanisms tried, three dead
+ends, diminishing returns each time.
+
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.

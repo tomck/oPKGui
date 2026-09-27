@@ -27,11 +27,13 @@ SERVICE_SETUP = src/service-setup.sh
 SERVICE_PORT = 18890
 ADMIN_PORT = $(SERVICE_PORT)
 SERVICE_PORT_TITLE = oPKGui (HTTP)
-# Round 6 tried getting a true embedded DSM desktop window
-# (SERVICE_TYPE=legacy, and a hand-authored SYNO.SDS._ThirdParty.App.* +
-# appWindow config) -- neither worked cleanly. Round 8 is trying the older
-# webman/3rdparty application.cfg mechanism (type=embedded) instead -- see
-# DESIGN.md's "DSM desktop window" note for both.
+# A true embedded DSM desktop window was tried three separate ways
+# (SERVICE_TYPE=legacy, a hand-authored SYNO.SDS._ThirdParty.App.* +
+# appWindow config, and a webman/3rdparty application.cfg) -- none
+# rendered anything on DSM 7. Back to the default (type: url): a normal
+# Main Menu icon that opens in a new tab, same as every other
+# third-party Package Center app. See DESIGN.md's "DSM desktop window"
+# note for the full history; not revisiting without a genuinely new lead.
 
 COPY_TARGET = opkgui_install
 
@@ -42,6 +44,3 @@ opkgui_install:
 	@$(MSG) Install the opkgui binary
 	@install -d -m 755 $(STAGING_DIR)/bin
 	@install -m 755 src/bin/opkgui-$(ARCH) $(STAGING_DIR)/bin/opkgui
-	@$(MSG) Install application.cfg for the webman/3rdparty embedded-window experiment
-	@install -d -m 755 $(STAGING_DIR)/app
-	@install -m 644 src/application.cfg $(STAGING_DIR)/app/application.cfg
