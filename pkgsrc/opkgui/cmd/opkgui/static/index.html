@@ -36,6 +36,13 @@
     display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px;
     background: var(--accent); color: #fff;
   }
+  .badge.dup { background: var(--danger); margin-left: 6px; }
+  .warning {
+    background: color-mix(in srgb, var(--danger) 12%, var(--bg));
+    border: 1px solid var(--danger); border-radius: 4px; padding: 8px 12px;
+    font-size: 12px; margin-bottom: 12px;
+  }
+  .warning label { display: block; margin-top: 6px; font-weight: 600; cursor: pointer; }
   .desc { color: var(--muted); }
   .panel { display: none; }
   .panel.active { display: block; }
@@ -66,6 +73,14 @@
 <div id="installed" class="panel active"><p class="empty">Loading...</p></div>
 <div id="upgradable" class="panel"><p class="empty">Loading...</p></div>
 <div id="available" class="panel">
+  <div class="warning">
+    Some Entware packages duplicate a command your Synology already provides (for example
+    <code>bash</code>). Installing one can shadow the system's own version and change what
+    actually runs when you use that command elsewhere -- these are marked
+    <span class="badge dup">system</span> below and disabled by default.
+    <label><input type="checkbox" id="allow-system-dup" onchange="toggleSystemDup(this.checked)">
+      Allow installing packages that duplicate a system command anyway</label>
+  </div>
   <input type="text" class="search" placeholder="Filter by name..." oninput="filterAvailable(this.value)">
   <div id="available-list"><p class="empty">Loading...</p></div>
 </div>
@@ -83,6 +98,12 @@ function escapeHtml(s) {
 }
 
 let availablePackages = [];
+let allowSystemDup = false;
+
+function toggleSystemDup(checked) {
+  allowSystemDup = checked;
+  filterAvailable(document.querySelector('#available .search').value);
+}
 
 function render(panelId, packages, kind) {
   const el = document.getElementById(panelId);
@@ -99,9 +120,11 @@ function render(panelId, packages, kind) {
         '<td><button class="action" onclick="runAction(\'upgrade\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Upgrade</button></td></tr>';
     }
     if (kind === 'available') {
-      return '<tr id="' + id + '"><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td>' +
+      const dupBadge = p.system_dup ? '<span class="badge dup" title="A command named &quot;' + escapeHtml(p.name) + '&quot; already exists outside /opt">system</span>' : '';
+      const disabled = (p.system_dup && !allowSystemDup) ? 'disabled title="Duplicates a system command -- enable the checkbox above to install anyway"' : '';
+      return '<tr id="' + id + '"><td>' + escapeHtml(p.name) + dupBadge + '</td><td>' + escapeHtml(p.version) + '</td>' +
         '<td class="desc">' + escapeHtml(p.desc || '') + '</td>' +
-        '<td><button class="action" onclick="runAction(\'install\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Install</button></td></tr>';
+        '<td><button class="action" ' + disabled + ' onclick="runAction(\'install\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Install</button></td></tr>';
     }
     return '<tr id="' + id + '"><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.version) + '</td>' +
       '<td><button class="action remove" onclick="runAction(\'remove\', \'' + escapeHtml(p.name) + '\', \'' + id + '\')">Remove</button></td></tr>';

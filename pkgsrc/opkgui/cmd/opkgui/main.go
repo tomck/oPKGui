@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -46,11 +47,33 @@ var mutateSubcommands = map[string]string{
 
 var packageNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9.+-]*$`)
 
+// systemBinDirs are checked to flag packages that likely duplicate a
+// command DSM/BusyBox already provides outside of Entware's own /opt tree
+// (e.g. installing Entware's `bash` alongside the system's own /bin/bash).
+// This is a name-only heuristic: it catches a package whose name matches
+// the command it provides, but not a multi-binary package (coreutils,
+// findutils, ...) whose name differs from the binaries it would actually
+// shadow.
+var systemBinDirs = []string{
+	"/bin", "/sbin", "/usr/bin", "/usr/sbin",
+	"/usr/syno/bin", "/usr/syno/sbin", "/usr/local/bin", "/usr/local/sbin",
+}
+
+func systemHasCommand(name string) bool {
+	for _, dir := range systemBinDirs {
+		if info, err := os.Stat(filepath.Join(dir, name)); err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
 type pkg struct {
 	Name       string `json:"name"`
 	Version    string `json:"version"`
 	NewVersion string `json:"new_version,omitempty"`
 	Desc       string `json:"desc,omitempty"`
+	SystemDup  bool   `json:"system_dup,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, status int, msg string, extra ...string) {
@@ -148,7 +171,13 @@ func readHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	thirdField := map[string]string{"upgradable": "new_version", "available": "desc"}[action]
-	writeOK(w, map[string]interface{}{"packages": parsePackageLines(lines, thirdField)})
+	packages := parsePackageLines(lines, thirdField)
+	if action == "available" {
+		for i := range packages {
+			packages[i].SystemDup = systemHasCommand(packages[i].Name)
+		}
+	}
+	writeOK(w, map[string]interface{}{"packages": packages})
 }
 
 // isKnownPackage cross-checks a name against opkg's own current listing
