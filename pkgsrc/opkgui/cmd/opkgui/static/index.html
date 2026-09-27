@@ -97,7 +97,10 @@
     Some Entware packages duplicate a command your Synology already provides (for example
     <code>bash</code>). Installing one can shadow the system's own version and change what
     actually runs when you use that command elsewhere -- these are marked
-    <span class="badge dup">system</span> below and disabled by default.
+    <span class="badge dup">system</span> below and disabled by default. This check only
+    matches on the package's name, so it can miss packages that install differently-named
+    files (like <code>coreutils</code> providing <code>ls</code>, <code>cat</code>, etc.) --
+    it's a best effort, not a guarantee, so use judgment on anything you install here.
     <label><input type="checkbox" id="allow-system-dup" onchange="toggleSystemDup(this.checked)">
       Allow installing packages that duplicate a system command anyway</label>
   </div>
