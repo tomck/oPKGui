@@ -27,6 +27,12 @@ ifeq ($(call version_ge, ${TCVERSION}, 7.0),1)
 SPK_DEPENDS = WebStation:PHP$(PHP_VERSION):Apache2.4
 endif
 
+# DSM_UI_DIR/DSM_UI_CONFIG must stay set even though NO_SERVICE_SHORTCUT
+# suppresses the app/config shortcut on DSM 7 -- spksrc's icon.mk only
+# generates app/images/* icons when both are non-empty.
+DSM_UI_DIR = app
+DSM_UI_CONFIG = src/app/config
+
 ifeq ($(call version_ge, ${TCVERSION}, 7.0),1)
 CONF_DIR = src/conf_php$(PHP_VERSION)/
 NO_SERVICE_SHORTCUT = y
