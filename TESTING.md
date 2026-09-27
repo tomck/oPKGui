@@ -53,4 +53,13 @@ any time from `spk/`).
   one genuinely open problem `spksrc` gives no pattern for), and packaging this as a
   self-hosted Package Center source for easier reinstall/updates instead of manual sideload.
 
+## Iteration log
+
+- **v0, round 1:** installer refused with "Unable to install because it runs with root
+  privileges." Cause: DSM 7 requires an explicit `conf/privilege` declaration that a package
+  doesn't need root, normally injected automatically by `spksrc`'s build framework — since
+  this SPK is hand-built rather than built via `spksrc`, that default never got added. Fixed
+  by adding `spk/conf/privilege` with `{"defaults": {"run-as": "package"}}`. Rebuilt; not yet
+  retested.
+
 Report back whatever DSM actually says/does and we'll iterate from there.
