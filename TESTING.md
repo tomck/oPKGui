@@ -134,9 +134,28 @@ through the new certificate warning, *before* opening oPKGui's window from the M
   install`, reflected in the Installed list). The one-time setup no longer requires
   hand-pasting a script into Task Scheduler at all — just click the button, then click Run.
 
+- **v1 → real architecture metadata:** the `noarch` mislabeling (Round 4) is fixed. Root cause
+  turned out to be more precise than "low disk space": spksrc's packaging step downloads a
+  full per-arch C toolchain for any non-`noarch` `ARCH`, even though our binary is a
+  CGO-disabled Go static build that never touches it -- and tar-extracting that toolchain
+  breaks under Docker Desktop's bind mount on macOS specifically (symlink creation fails
+  partway through `libexec/gcc/.../liblto_plugin.so`, cascading to "No such file or directory"
+  for everything nested under it). Freeing disk space didn't help, because it was never a
+  disk problem. Confirmed by removing the `Makefile`'s `override ARCH=noarch` and building for
+  real `x64`/`aarch64` on a Linux GitHub Actions runner instead (`.github/workflows/build.yml`)
+  -- no bind-mount bug there, both built clean. Verified via each `.spk`'s `INFO` file: `arch=`
+  now lists real platform codenames (e.g. `avoton bromolow denverton ...` for `x64`), not
+  `noarch` -- so Package Center will correctly refuse the wrong package on the wrong hardware.
+  `build.sh` now takes `ARCH=x64|aarch64|armv7|noarch` (env var) and maps it to the right
+  `GOARCH`/`GOARM` itself; local macOS dev still defaults to `noarch` since real archs remain
+  broken from a Mac specifically, not in CI.
+
 ## What's next (v2?)
 
 - Packaging this as a self-hosted Package Center source (a JSON feed + hosted `.spk`) for
   reinstall/updates without manual sideload.
-- The `noarch` architecture-metadata gap (DESIGN.md Round 4) before any distribution beyond
-  the user's own NAS.
+- CI currently only builds against `TCVERSION=7.1`; some current aarch64 models (per spksrc's
+  own docs) are on the 7.2 toolchain generation -- add a `TCVERSION` axis to the CI matrix
+  before treating aarch64 coverage as complete.
+- Actually approaching SynoCommunity about distribution now that real multi-arch builds work
+  end-to-end in CI (the original goal this was all in service of).

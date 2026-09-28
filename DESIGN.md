@@ -427,6 +427,46 @@ that tab entirely (native JS dialogs block further automation) — the user had 
 **Rebuilt with the corrected schema, not yet re-tested live** — that's the next step, and
 per the note above, will also need the HTTPS cert re-accepted again after this reinstall.
 
+## Round 11: confirmed the automated grant end-to-end, then fixed real multi-arch
+
+**Confirmed live**: clicked "Set Up Permission Grant Task", created the task, right-clicked
+Run — Task Scheduler's "View Result" showed **Normal (0)**. Verified this wasn't just
+coasting on an earlier manual grant (idempotent, so a stale success would look identical) by
+checking `/opt/lib/opkg/status`'s mtime (freshly rewritten at run time, not stale) and by
+exercising the actual sudoers rule end-to-end through the app's own API directly (`POST
+/api/action?action=install&pkg=cal` → succeeded via `sudo opkg install`, reflected in the
+Installed list). The one-time setup this project always needed no longer requires
+hand-pasting a script into Task Scheduler at all.
+
+**Then tackled the `noarch` architecture-metadata gap** (open since Round 4) now that
+distribution to SynoCommunity became an explicit goal. Removed the `Makefile`'s
+`override ARCH=noarch` and tried a real `ARCH=aarch64` build locally — hit the *same*
+failure as Round 4's `x64` attempt, but this time diagnosed precisely rather than attributed
+to low disk space: spksrc's packaging step downloads a full per-arch **C** cross-toolchain
+for any non-`noarch` `ARCH` as an unconditional stage1 prerequisite (`tcvars_done`), even
+though oPKGui's binary is a `CGO_ENABLED=0` Go static build that never touches a C compiler
+at all — Go's own cross-compilation already produced it outside spksrc entirely. Tar-
+extracting that toolchain archive breaks under Docker Desktop's bind-mount layer on macOS
+specifically: symlink creation fails partway through (e.g.
+`libexec/gcc/aarch64-unknown-linux-gnu/8.5.0/liblto_plugin.so`), and everything nested under
+the failed directory cascades to "No such file or directory". Freeing disk space (tried
+first, since that was Round 4's working theory) made no difference, confirming it was never
+about space.
+
+**Fix**: build on Linux instead, where this bind-mount bug doesn't exist — added
+`.github/workflows/build.yml`, a matrix over `ARCH: [x64, aarch64]` on `ubuntu-latest`,
+running the same `build.sh` CI uses locally. Both built clean on the first real attempt.
+Confirmed each `.spk`'s `INFO` file now declares real platform codenames (e.g. `arch="...
+avoton bromolow denverton ..."` for `x64`) instead of `noarch` — Package Center will now
+correctly refuse to install the wrong package on the wrong hardware. `build.sh` now takes
+`ARCH` as an env var (`noarch`/`x64`/`aarch64`/`armv7`) and maps it to the right
+`GOARCH`/`GOARM` itself; local macOS dev still defaults to `noarch` since real archs remain
+broken from a Mac specifically, not from a structural limit.
+
+**Still open**: CI only builds against `TCVERSION=7.1` so far; some current aarch64 models
+are on the 7.2 toolchain generation per spksrc's own docs — needs a `TCVERSION` axis added
+to the matrix before aarch64 coverage is treated as complete.
+
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.
