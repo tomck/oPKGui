@@ -341,6 +341,63 @@ Two small bugs found in that same test round, both fixed:
   UI — the same "defense in depth, don't rely on the frontend alone" principle as the
   package-name validation from Round 7.
 
+## Round 10: creating the permission-grant Task Scheduler entry from the UI
+
+The user asked two related but very different questions: could oPKGui fully automate
+installing Entware itself (bootstrap on a NAS that has none), and could it at least create
+the Task Scheduler entry for its own permission grant, leaving the user to click Run?
+
+**Fully automating Entware's install: correctly ruled out.** That needs real root-level
+filesystem work (creating a share, `mount --bind`, chowning a tree) — nothing our package
+can ever do itself (Round 5's restriction is unconditional, and broadening the sudoers grant
+to cover arbitrary provisioning would reopen the exact "arbitrary RCE surface" risk the
+original handoff doc flagged before any code existed). Not pursued.
+
+**Creating the Task Scheduler entry via API: real, and implemented — scoped to create only.**
+The key realization: creating a task is authorized purely by *the logged-in admin's own
+session* (same as clicking through Control Panel by hand) — it needs nothing from our
+package, since DSM's own Task Scheduler daemon (always root) is what actually executes it
+later. Confirmed a real webapi exists for this
+(`/usr/syno/synoman/webapi/SYNO.Core.TaskScheduler.lib`, methods `list`/`get`/`set`/
+`create`/`delete`/`run`/`set_enable`, `authLevel: 1`, same admin-only gating as everything
+else). Given the mechanism doesn't actually distinguish "create the task" from "create AND
+immediately run it as root," the user was asked how far to take it and chose the
+conservative option (create only, user clicks Run) explicitly because of "something
+unforeseen" — a judgment call worth respecting, not just a default.
+
+**Getting the real request schema took real debugging, not documentation** — Synology
+doesn't publish this. Wrong turns, each informative:
+- Guessed `SYNO.Core.TaskScheduler.list`/`get` (the `.lib` that's actually installed) with
+  version 3 → error 103 (method doesn't exist at that version — version 3 only has
+  `get`/`set`/`create` per the `.lib`'s own method table).
+- Fixed to version 2, `list` worked, but `get` on a specific task kept returning error 4800
+  (an API-specific code, undocumented) despite trying a couple of plausible `id` parameter
+  shapes (a binary string in the `.so`, `"tasks must be an array of {id, real_owner}"`,
+  turned out to apply to a different method).
+- Rather than keep guessing, captured the *real* request DSM's own Control Panel sends when
+  editing a task, by hooking `Ext.Ajax.request` in the live page (via Claude in Chrome,
+  connected mid-session in the desktop app) and re-opening the task's edit dialog. This
+  revealed the actual API is a **completely different one**: `SYNO.Core.EventScheduler`,
+  identified by `task_name` (a string), not `SYNO.Core.TaskScheduler`/numeric `id` at all —
+  explaining every prior failure at once.
+- Reading the real response was blocked by the extension's own safety filter (flagged
+  cookie/token-like content) even for a pure in-memory DOM read with no network call — a
+  legitimate guard, not something to route around. Worked around it by reading only the
+  already-rendered form's field *names* (safe: structural, not session data), which fully
+  revealed the schema: `task_name`, `owner` (uid, `0` for root), `event` (string, `"bootup"`
+  for the boot-triggered type), `depend_on_task`, `enable`, `notify_enable`, `notify_mail`,
+  `notify_if_error`, `script`.
+
+**Implemented**: `createPermissionGrantTask()` in `opkgui.js`, a toolbar button on the
+AppWindow calling `SYNO.Core.EventScheduler.create` with the same script content as
+`opkgui-grant-permissions.sh`, embedded as a JS string constant. Deliberately uses
+`Ext.Ajax` (not the raw-XHR helper from Round 9) for this one call specifically — this goes
+to DSM's own same-origin webapi, and DSM's own code globally hooks `Ext.Ajax` to attach the
+`X-SYNO-TOKEN` CSRF header, which a mutating call here actually needs (the opposite of why
+raw XHR was necessary for oPKGui's own cross-origin API). Confirms success/failure and tells
+the user to go click Run themselves — no auto-run. **Built, not yet tested live** — that's
+the next step.
+
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.

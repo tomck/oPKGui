@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "opkgui",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd pkgsrc/opkgui/cmd/opkgui && exec go run . -port 8899"],
+      "port": 8899
+    }
+  ]
+}

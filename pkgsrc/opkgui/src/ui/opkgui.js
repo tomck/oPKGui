@@ -48,6 +48,86 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
         Ext.each(grids, function(g) { g.opkguiLoad(); });
     }
 
+    // The one-time permission grant (opkg.conf/status access + the narrow
+    // sudoers rule) still needs a DSM Task Scheduler entry -- oPKGui can
+    // never get root itself (DESIGN.md Round 5). This creates that task
+    // via DSM's own SYNO.Core.EventScheduler webapi instead of asking the
+    // user to paste the script in by hand. Deliberately does NOT also call
+    // "run": the user still clicks Run themselves in Task Scheduler, a
+    // visible consent step before anything executes as root (see
+    // DESIGN.md's Round 10 -- this was a scope choice, not a limitation).
+    //
+    // Uses Ext.Ajax (not the raw XHR helper above) on purpose: this call
+    // goes to DSM's own same-origin /webapi/entry.cgi, and DSM's own code
+    // globally hooks Ext.Ajax to attach the X-SYNO-TOKEN CSRF header --
+    // exactly what a mutating webapi call here needs, and the reverse of
+    // why Ext.Ajax was avoided for oPKGui's own cross-origin API above.
+    var GRANT_SCRIPT = [
+        "#!/bin/sh",
+        "# oPKGui: grant its unprivileged service account (sc-opkgui) exactly the",
+        "# elevated access it needs, since DSM 7 won't let the .spk itself request",
+        "# any root privilege.",
+        "",
+        "for f in /opt/etc/opkg.conf /opt/lib/opkg/status; do",
+        "    if [ -e \"${f}\" ]; then",
+        "        chown root:opkgui \"${f}\"",
+        "        chmod 640 \"${f}\"",
+        "    fi",
+        "done",
+        "",
+        "cat > /etc/sudoers.d/opkgui <<'EOF'",
+        "sc-opkgui ALL=(root) NOPASSWD: /opt/bin/opkg install *",
+        "sc-opkgui ALL=(root) NOPASSWD: /opt/bin/opkg remove *",
+        "sc-opkgui ALL=(root) NOPASSWD: /opt/bin/opkg upgrade *",
+        "Defaults!/opt/bin/opkg !requiretty",
+        "EOF",
+        "chown root:root /etc/sudoers.d/opkgui",
+        "chmod 440 /etc/sudoers.d/opkgui"
+    ].join("\n");
+
+    function createPermissionGrantTask() {
+        if (!confirm("Create a DSM Task Scheduler task (\"oPKGui permissions\", User: root, " +
+            "Event: Boot-up) that grants oPKGui's service account read access to opkg's " +
+            "config/status and a narrow sudo rule for opkg install/remove/upgrade?\n\n" +
+            "This only CREATES the task -- it does not run it. You'll still need to open " +
+            "Control Panel → Task Scheduler and click Run yourself.")) {
+            return;
+        }
+        Ext.Ajax.request({
+            url: "/webapi/entry.cgi",
+            method: "POST",
+            params: {
+                api: "SYNO.Core.EventScheduler",
+                method: "create",
+                version: 1,
+                task_name: "oPKGui permissions",
+                owner: 0,
+                event: "bootup",
+                enable: true,
+                notify_enable: false,
+                notify_if_error: false,
+                notify_mail: "",
+                script: GRANT_SCRIPT
+            },
+            success: function(r) {
+                var body = {};
+                try { body = Ext.decode(r.responseText); } catch (e) {}
+                if (body.success) {
+                    alert("Created. Open Control Panel → Task Scheduler, select " +
+                        "\"oPKGui permissions\", and click Run.");
+                } else {
+                    alert("Failed to create the task (error code " +
+                        (body.error && body.error.code) + "). You can still set it up " +
+                        "manually -- see TESTING.md.");
+                }
+            },
+            failure: function(r) {
+                alert("Request failed (" + r.status + "). You can still set it up " +
+                    "manually -- see TESTING.md.");
+            }
+        });
+    }
+
     function actionCall(verb, name, cb) {
         httpRequest("POST", BASE + "/api/action?action=" + verb + "&pkg=" + encodeURIComponent(name), cb);
     }
@@ -187,6 +267,10 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
                 width: 820,
                 height: 560,
                 layout: "fit",
+                tbar: [{
+                    text: "Set Up Permission Grant Task",
+                    handler: createPermissionGrantTask
+                }],
                 items: [{
                     xtype: "tabpanel",
                     activeTab: 0,
