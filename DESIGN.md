@@ -242,6 +242,51 @@ fed. Reverted (`application.cfg` removed). **Not revisiting the embedded-window 
 again without a genuinely new, concrete lead** — three real mechanisms tried, three dead
 ends, diminishing returns each time.
 
+## Round 9: the genuinely new lead — and it worked
+
+Round 6 closed with "this almost certainly needs more than JSON config... and/or same-origin
+serving." Both guesses were half-right and half-wrong, and the actual missing piece was much
+simpler: real documentation existed the whole time, just not where the earlier searches
+looked. `~/Claude/DSMjs` (a side investigation into the same question) initially concluded
+"no public SDK, proprietary, reverse-engineering required" after reverse-engineering
+first-party packages' compiled files — a real, careful process, but one that skipped
+searching for existing community docs/templates first. The user pushed back directly on
+that "nobody bothered" framing, which prompted an actual web search rather than more binary
+archaeology, and immediately turned up:
+- A `spksrc` wiki page, ["UI Develop"](https://github.com/SynoCommunity/spksrc/wiki/UI-Develop).
+- A real template repo, [`DigitalBox98/SimpleExtJSApp`](https://github.com/DigitalBox98/SimpleExtJSApp),
+  whose `/docs` folder ships a full ExtJS API doc/guide tarball (`synoextjsdocs.tar.gz` +
+  a `-source` tarball with the actual guide markdown and framework source).
+
+The getting-started guide's own example is the exact piece Round 6's third attempt got
+wrong: third-party apps use their **own** namespace (the guide's example:
+`SYNOCOMMUNITY.SimpleExtJSApp.*`), not `SYNO.SDS.*` or a guessed
+`SYNO.SDS._ThirdParty.App.*` — while *extending* `SYNO.SDS.AppInstance`/`SYNO.SDS.AppWindow`
+as base classes. Round 6's attempt also never shipped any actual `.js` file implementing
+those classes at all, just a config guessing at the shape — this is the difference between
+"guessing at a JSON shape" and "using the documented pattern with real code behind it."
+
+Separately, pulling Synology's own official dev headers (from the same toolkit `spksrc`
+uses — `archive.synology.com`'s DSM 7.1 toolkit, `avoton` platform match for this NAS)
+confirmed something that had been ambiguous since the `uitest` test in `~/Claude/DSMjs`:
+webapi auth (`APIRequest::IsAdmin()`, `GetLoginUID()`) is checked against the *logged-in DSM
+session*, not package identity — so "a copied `.so` still worked under a new package name"
+was never evidence of "no sandboxing," just evidence that the tester was already an admin.
+
+**Implemented:** `pkgsrc/opkgui/src/ui/opkgui.js` — `SYNOCOMMUNITY.OPKGui.AppInstance`/
+`AppWindow`, following the documented pattern exactly, whose window body is just an iframe
+onto oPKGui's own existing `http://<hostname>:18890/` (via `Ext.Ajax`'s sibling pattern of
+just hitting a plain URL — no compiled `.so` needed, since oPKGui already has a working
+HTTP+JSON backend). This reuses the entire existing, already-tested frontend unchanged and
+only adds real DSM window chrome around it. `Makefile`'s `DSM_UI_CONFIG` now points at a
+hand-authored `src/ui/config` instead of the framework's auto-generated one. **Built, not
+yet installed/tested live** — that's the next step.
+
+One known risk not yet tested: if DSM is accessed over HTTPS, the iframe's plain-`http://`
+`src` may get blocked as mixed content by the browser. Deliberately not pre-solving this
+(e.g. adding TLS to the Go server, or a reverse-proxy rule) until a real test shows whether
+it's actually a problem — consistent with how every other round in this doc has worked.
+
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.

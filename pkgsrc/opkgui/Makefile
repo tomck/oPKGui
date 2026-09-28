@@ -27,13 +27,13 @@ SERVICE_SETUP = src/service-setup.sh
 SERVICE_PORT = 18890
 ADMIN_PORT = $(SERVICE_PORT)
 SERVICE_PORT_TITLE = oPKGui (HTTP)
-# A true embedded DSM desktop window was tried three separate ways
-# (SERVICE_TYPE=legacy, a hand-authored SYNO.SDS._ThirdParty.App.* +
-# appWindow config, and a webman/3rdparty application.cfg) -- none
-# rendered anything on DSM 7. Back to the default (type: url): a normal
-# Main Menu icon that opens in a new tab, same as every other
-# third-party Package Center app. See DESIGN.md's "DSM desktop window"
-# note for the full history; not revisiting without a genuinely new lead.
+# Round 9: a real embedded DSM desktop window, via SynoCommunity's actual
+# documented ExtJS pattern (SYNOCOMMUNITY.<App>.* extending SYNO.SDS.
+# AppInstance/AppWindow -- found via docs/templates search, not guessed;
+# see DESIGN.md's Round 9). Three earlier guesses (SERVICE_TYPE=legacy, a
+# hand-authored SYNO.SDS._ThirdParty.App.* config, and a webman/3rdparty
+# application.cfg) all failed because none of them shipped real JS at all.
+DSM_UI_CONFIG = src/ui/config
 
 COPY_TARGET = opkgui_install
 
@@ -44,3 +44,6 @@ opkgui_install:
 	@$(MSG) Install the opkgui binary
 	@install -d -m 755 $(STAGING_DIR)/bin
 	@install -m 755 src/bin/opkgui-$(ARCH) $(STAGING_DIR)/bin/opkgui
+	@$(MSG) Install the ExtJS desktop window
+	@install -d -m 755 $(STAGING_DIR)/app
+	@install -m 644 src/ui/opkgui.js $(STAGING_DIR)/app/opkgui.js

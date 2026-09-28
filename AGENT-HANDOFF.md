@@ -75,25 +75,29 @@ SynoCommunity's official repo (via their Discord https://discord.gg/nnN9fgE7EF o
 GitHub issue) — that's a distribution-reach decision made from a working artifact, not a
 pre-approval step blocking day one.
 
-## Suggested first steps (not yet done)
+## Real embedded DSM window: done (Round 9), lighter than first planned
 
-- [ ] Scope a v0: read-only "installed Entware packages + available updates" view only. No
-      install/remove actions yet — prove the DSM WebUI ↔ opkg wiring works and is safe before
-      adding mutation.
-- [ ] Decide backend language/runtime for the DSM WebUI shell (historically PHP-CGI in
-      SynoCommunity-style packages; check whether that's still the modern pattern for DSM 7, or
-      whether a self-hosted independent package has more freedom here since there's no
-      `spksrc` convention to follow).
-- [ ] Design the privilege boundary explicitly (what user/context does the backend run as, how
-      does it authenticate the DSM session making the request) before writing any install/remove
-      code path.
-- [ ] Figure out the self-hosted repo mechanics: what a Package Center custom source needs
-      (package list JSON + `.spk` files + hosting), so v0 can be installed by adding a URL rather
-      than sideloading a file.
-- [ ] Once a working v0 exists: decide whether to pursue SynoCommunity inclusion, and if so,
-      open the conversation with them then (not before).
+A `~/Claude/DSMjs` side investigation (triggered by wanting oPKGui's icon to open as a real
+DSM window instead of a new tab) found Synology's private `SYNO.SDS.*` ExtJS framework and,
+initially, concluded it'd require a compiled `.so` webapi backend (three components: ExtJS
+JS + a `.lib` API definition + a C/C++ `.so` wrapping `opkg`) — modeled on copying the real
+Git app's files. That plan is **superseded**: once actual SynoCommunity ExtJS documentation
+was found (a `spksrc` wiki page + a real template repo,
+[`DigitalBox98/SimpleExtJSApp`](https://github.com/DigitalBox98/SimpleExtJSApp) — see
+`DESIGN.md`'s Round 9), it turned out no compiled backend is needed at all: a real
+`SYNO.SDS.AppWindow` can just `Ext.Ajax.request`/embed an iframe pointing at any URL,
+including oPKGui's own existing Go HTTP service. Implemented as: a small `opkgui.js`
+(`SYNOCOMMUNITY.OPKGui.*` namespace, extending `SYNO.SDS.AppInstance`/`AppWindow`) whose
+window is just an iframe onto `http://<hostname>:18890/` — reusing the existing, already-
+tested frontend unchanged, no new backend at all. See `pkgsrc/opkgui/src/ui/`.
 
-## Non-goals for v0
+Also worth correcting: the DSMjs doc's original claim that third-party `.so` calls happen
+"without restriction or sandboxing" turned out to be incomplete — checking Synology's own
+official headers (`webapi-DSM5/APIRequest.h`) showed auth is checked against the *logged-in
+DSM session* (`IsAdmin()`, `GetLoginUID()`), not package identity. The earlier test succeeding
+was explained by the tester already being an admin, not by an absence of access control.
+
+## Non-goals for v0 (still true)
 
 - Don't try to replace Entware's `opkg` semantics with something custom — just wrap it.
 - Don't try to support every possible Entware package category (e.g. arbitrary daemons with init
@@ -101,5 +105,10 @@ pre-approval step blocking day one.
 
 ## Related
 
+- `DESIGN.md` — full round-by-round history, including Round 9 (the embedded window that
+  actually worked) and the corrected DSMjs claim above.
+- **DSMjs** (`~/Claude/DSMjs/AGENT-HANDOFF.md`) — the side investigation that surfaced the
+  real ExtJS pattern. Its own conclusions evolved significantly over the investigation; read
+  its top "Resolved" section, not its middle sections, for the current understanding.
 - [[SynoVPNSocks]] — the project that surfaced this gap (`~/Claude/SynoVPNSocks`), not otherwise
   related in implementation.

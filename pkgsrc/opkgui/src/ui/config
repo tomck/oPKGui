@@ -1,0 +1,20 @@
+{
+  "opkgui.js": {
+    "SYNOCOMMUNITY.OPKGui.AppInstance": {
+      "type": "app",
+      "title": "oPKGui",
+      "desc": "Browse, install, remove and upgrade Entware (opkg) packages.",
+      "version": "0.1.0",
+      "icon": "images/opkgui-{0}.png",
+      "allowMultiInstance": false,
+      "allUsers": false,
+      "appWindow": "SYNOCOMMUNITY.OPKGui.AppWindow",
+      "depend": ["SYNOCOMMUNITY.OPKGui.AppWindow"]
+    },
+    "SYNOCOMMUNITY.OPKGui.AppWindow": {
+      "type": "lib",
+      "title": "oPKGui",
+      "icon": "images/opkgui-{0}.png"
+    }
+  }
+}
