@@ -120,6 +120,20 @@ through the new certificate warning, *before* opening oPKGui's window from the M
   needed.** Once the actual script was in there, `opkg install cal` worked immediately —
   confirmed via SSH (`/opt/bin/cal` present) and in the web UI's Installed tab.
 
+- **v1, "Set Up Permission Grant Task" button (automates the grant itself):** first attempt at
+  calling `SYNO.Core.EventScheduler.create` guessed a field named `script` and a bare `owner: 0`
+  — DSM returned error 117. Rather than keep guessing, hooked `Ext.Ajax.request` live (via
+  Claude in Chrome) while creating a real throwaway task through DSM's own "Create" dialog,
+  which revealed the true field names (`operation`/`operation_type`, not `script`) and that
+  **every param value must be individually `JSON.stringify`'d**, e.g. `owner` is the string
+  `{"0":"root"}`. Fixed, then confirmed on the real NAS: clicked the button, created the task,
+  right-clicked → Run — Task Scheduler's "View Result" showed **Normal (0)**. Verified this
+  wasn't just coasting on the earlier manual grant by checking `/opt/lib/opkg/status`'s mtime
+  (freshly rewritten at run time) and by exercising the actual sudoers rule end-to-end through
+  the app's own API (`POST /api/action?action=install&pkg=cal` → succeeded via `sudo opkg
+  install`, reflected in the Installed list). The one-time setup no longer requires
+  hand-pasting a script into Task Scheduler at all — just click the button, then click Run.
+
 ## What's next (v2?)
 
 - Packaging this as a self-hosted Package Center source (a JSON feed + hosted `.spk`) for
