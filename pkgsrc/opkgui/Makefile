@@ -5,12 +5,10 @@ SPK_ICON = src/opkgui.png
 
 DEPENDS =
 
-# Ships a prebuilt static Go binary (cross-compiled outside spksrc, see
-# build.sh) rather than compiling via spksrc's own toolchain, so no real
-# ARCH/toolchain is needed. This does mean DSM won't block installing on a
-# non-x86_64 model at the Package Center level -- see DESIGN.md's "noarch
-# caveat" note. Revisit before any wider distribution.
-override ARCH=noarch
+# Ships a prebuilt static Go binary per real ARCH (cross-compiled outside
+# spksrc via plain `go build`, see build.sh) rather than compiling via
+# spksrc's own toolchain -- Go's own cross-compilation covers every real
+# arch spksrc supports without needing a C toolchain at all.
 
 MAINTAINER = tomkoch
 DESCRIPTION = Browse, install, remove and upgrade Entware (opkg) packages.

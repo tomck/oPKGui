@@ -9,12 +9,27 @@ SPKSRC_DIR="$ROOT/.spksrc"
 PKG_SRC="$ROOT/pkgsrc/opkgui"
 DIST_DIR="$ROOT/dist"
 TCVERSION="${TCVERSION:-7.1}"
-ARCH=noarch  # see Makefile's override ARCH=noarch comment for why
+# Real per-arch builds (ARCH=x64/aarch64/...) need spksrc's own toolchain
+# download for that arch even though we don't compile with it -- and that
+# step's tar extraction breaks under Docker Desktop's bind mount on macOS
+# (see DESIGN.md's Round 4 / TESTING.md, reproduced again with aarch64).
+# Real archs build fine in CI on Linux (.github/workflows/build.yml) --
+# default stays noarch here so local dev on macOS is unaffected.
+ARCH="${ARCH:-noarch}"
 
-echo "Cross-compiling opkgui binary for linux/amd64..."
+case "$ARCH" in
+    noarch) GOARCH=amd64; GOARM= ;;
+    x64)    GOARCH=amd64; GOARM= ;;
+    aarch64) GOARCH=arm64; GOARM= ;;
+    armv7)  GOARCH=arm; GOARM=7 ;;
+    *) echo "Unknown ARCH=$ARCH (add its GOARCH/GOARM mapping here)" >&2; exit 1 ;;
+esac
+
+echo "Cross-compiling opkgui binary for linux/$GOARCH (ARCH=$ARCH)..."
 mkdir -p "$PKG_SRC/src/bin"
 ( cd "$PKG_SRC/cmd/opkgui" && \
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o "$PKG_SRC/src/bin/opkgui-$ARCH" . )
+  CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" GOARM="$GOARM" \
+  go build -ldflags="-s -w" -o "$PKG_SRC/src/bin/opkgui-$ARCH" . )
 
 if [ ! -d "$SPKSRC_DIR" ]; then
     echo "Cloning spksrc (shallow)..."
