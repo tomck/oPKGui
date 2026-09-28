@@ -4,6 +4,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -13,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -330,6 +332,31 @@ func main() {
 	mux.HandleFunc("/api/status", statusHandler)
 	mux.HandleFunc("/api", readHandler)
 	mux.HandleFunc("/api/action", mutateHandler)
+
+	// DSM forces HTTPS for its own UI, so the AppWindow iframe (see
+	// opkgui.js) needs an HTTPS endpoint too or the browser mixed-content
+	// blocks it. Serve TLS on port+1 alongside the existing plain HTTP.
+	if portNum, err := strconv.Atoi(*port); err == nil {
+		varDir := os.Getenv("SYNOPKG_PKGVAR")
+		if varDir == "" {
+			varDir = os.TempDir()
+		}
+		cert, err := ensureTLSCert(varDir)
+		if err != nil {
+			log.Printf("TLS cert setup failed, HTTPS listener disabled: %v", err)
+		} else {
+			tlsAddr := "0.0.0.0:" + strconv.Itoa(portNum+1)
+			tlsServer := &http.Server{
+				Addr:      tlsAddr,
+				Handler:   mux,
+				TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+			}
+			go func() {
+				log.Printf("oPKGui listening (TLS) on %s", tlsAddr)
+				log.Print(tlsServer.ListenAndServeTLS("", ""))
+			}()
+		}
+	}
 
 	addr := "0.0.0.0:" + *port
 	log.Printf("oPKGui listening on %s", addr)

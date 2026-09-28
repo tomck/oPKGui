@@ -279,13 +279,18 @@ onto oPKGui's own existing `http://<hostname>:18890/` (via `Ext.Ajax`'s sibling 
 just hitting a plain URL — no compiled `.so` needed, since oPKGui already has a working
 HTTP+JSON backend). This reuses the entire existing, already-tested frontend unchanged and
 only adds real DSM window chrome around it. `Makefile`'s `DSM_UI_CONFIG` now points at a
-hand-authored `src/ui/config` instead of the framework's auto-generated one. **Built, not
-yet installed/tested live** — that's the next step.
+hand-authored `src/ui/config` instead of the framework's auto-generated one.
 
-One known risk not yet tested: if DSM is accessed over HTTPS, the iframe's plain-`http://`
-`src` may get blocked as mixed content by the browser. Deliberately not pre-solving this
-(e.g. adding TLS to the Go server, or a reverse-proxy rule) until a real test shows whether
-it's actually a problem — consistent with how every other round in this doc has worked.
+The flagged mixed-content risk was real: the first live test showed a blank window, and the
+user confirmed DSM forces HTTP→HTTPS redirect here. Fixed by adding a self-signed TLS
+listener to the Go server itself (`tls.go` — generates and persists a cert on first run,
+covering every local IP plus the hostname as SAN, stored under `SYNOPKG_PKGVAR`), serving on
+`port+1` (`18891`) alongside the existing plain HTTP `18890`. `opkgui.js` now picks
+protocol/port to match `window.location.protocol`, so the iframe is same-scheme as whatever
+DSM itself is served over. Since it's self-signed, the *first* time it's reached the browser
+needs a manual "proceed anyway" click — done by visiting `https://<hostname>:18891/`
+directly once, since a background iframe load can't surface that prompt itself. **Rebuilt,
+not yet re-tested live** — that's the next step.
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 

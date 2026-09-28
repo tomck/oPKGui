@@ -22,8 +22,13 @@ Ext.define("SYNOCOMMUNITY.OPKGui.AppWindow", {
     extend: "SYNO.SDS.AppWindow",
     constructor: function(config) {
         // window.location.hostname (not a hardcoded IP) so this works
-        // regardless of how the admin is currently reaching DSM.
-        var url = window.location.protocol + "//" + window.location.hostname + ":18890/";
+        // regardless of how the admin is currently reaching DSM. DSM
+        // forces HTTPS for its own UI, and a plain-http iframe inside an
+        // https page gets mixed-content blocked -- so match protocol,
+        // using oPKGui's HTTPS listener (port+1) when DSM is on HTTPS.
+        var isHttps = window.location.protocol === "https:";
+        var port = isHttps ? 18891 : 18890;
+        var url = (isHttps ? "https:" : "http:") + "//" + window.location.hostname + ":" + port + "/";
         config = Ext.apply({
             resizable: true,
             maximizable: true,
