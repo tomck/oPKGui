@@ -311,6 +311,24 @@ func mutateHandler(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, map[string]interface{}{"output": lines})
 }
 
+// withCORS lets the ExtJS desktop window (served by DSM on a different
+// origin -- different port counts as a different origin) call this API
+// via XHR. DSM's own CSP forbids framing anything off-origin (frame-src:
+// 'self'), which is why the window embeds real ExtJS widgets instead of
+// an iframe -- but its connect-src is unrestricted, so XHR here is fine.
+func withCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With, Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	port := flag.String("port", "18890", "port to listen on")
 	flag.Parse()
@@ -348,7 +366,7 @@ func main() {
 			tlsAddr := "0.0.0.0:" + strconv.Itoa(portNum+1)
 			tlsServer := &http.Server{
 				Addr:      tlsAddr,
-				Handler:   mux,
+				Handler:   withCORS(mux),
 				TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
 			}
 			go func() {
@@ -360,5 +378,5 @@ func main() {
 
 	addr := "0.0.0.0:" + *port
 	log.Printf("oPKGui listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, withCORS(mux)))
 }

@@ -289,8 +289,26 @@ covering every local IP plus the hostname as SAN, stored under `SYNOPKG_PKGVAR`)
 protocol/port to match `window.location.protocol`, so the iframe is same-scheme as whatever
 DSM itself is served over. Since it's self-signed, the *first* time it's reached the browser
 needs a manual "proceed anyway" click — done by visiting `https://<hostname>:18891/`
-directly once, since a background iframe load can't surface that prompt itself. **Rebuilt,
-not yet re-tested live** — that's the next step.
+directly once, since a background iframe load can't surface that prompt itself.
+
+**The TLS fix wasn't enough either** — still blank after accepting the cert. Checked DSM's
+actual response headers directly (`curl -D -`) rather than guessing further: DSM's page
+sends `Content-Security-Policy: ... frame-src 'self' data: blob: https://*.synology.com
+...` — no origin outside `'self'` (and a couple of Synology's own domains) is ever
+permitted in a frame, independent of TLS/certs entirely. **The iframe approach cannot work
+at all**, on any port, with any cert — this is a hard platform restriction, not a
+configuration problem.
+
+The same CSP's `connect-src` is unrestricted (`data: ws: wss: http: https:`), so plain XHR
+to another origin *is* allowed — only framing is blocked. Rewrote `opkgui.js` to drop the
+iframe entirely and build real ExtJS 3.x grid widgets (`Ext.grid.GridPanel` +
+`Ext.data.JsonStore`, modeled on the real patterns already confirmed working in Git's own
+code: `RowSelectionModel`, `cellclick`-based row actions, a `tbar` search filter) calling
+oPKGui's existing JSON API directly via `Ext.Ajax`/`Ext.data.JsonStore`'s `url` config. Added
+CORS headers (`withCORS` in `main.go`) so the cross-port XHR is actually readable by the
+page, not just sent. This ends up closer to a real native package-manager UI than the
+iframe wrapper would have been — ironic, given it was forced by a restriction rather than
+chosen up front. **Rebuilt, not yet tested live** — that's the next step.
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 
