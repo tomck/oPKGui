@@ -93,6 +93,15 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
             "Control Panel → Task Scheduler and click Run yourself.")) {
             return;
         }
+        // SYNO.Core.EventScheduler.create's real request shape, captured
+        // live (via Claude in Chrome, hooking Ext.Ajax.request) from DSM's
+        // own Task Scheduler "Create" dialog -- not documented anywhere,
+        // and different from what the (also real) edit-form field names
+        // suggested. Two things a first attempt got wrong: the script
+        // content field is "operation" (+ a separate "operation_type":
+        // "script"), not "script" -- and every value is individually
+        // JSON-stringified before being sent, e.g. owner is the *string*
+        // {"0":"root"}, not a bare 0. See DESIGN.md's Round 10.
         Ext.Ajax.request({
             url: "/webapi/entry.cgi",
             method: "POST",
@@ -100,14 +109,16 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
                 api: "SYNO.Core.EventScheduler",
                 method: "create",
                 version: 1,
-                task_name: "oPKGui permissions",
-                owner: 0,
-                event: "bootup",
-                enable: true,
-                notify_enable: false,
-                notify_if_error: false,
-                notify_mail: "",
-                script: GRANT_SCRIPT
+                task_name: JSON.stringify("oPKGui permissions"),
+                owner: JSON.stringify({ 0: "root" }),
+                event: JSON.stringify("bootup"),
+                depend_on_task: JSON.stringify(""),
+                enable: JSON.stringify(true),
+                notify_enable: JSON.stringify(false),
+                notify_if_error: JSON.stringify(false),
+                notify_mail: JSON.stringify(""),
+                operation_type: JSON.stringify("script"),
+                operation: JSON.stringify(GRANT_SCRIPT)
             },
             success: function(r) {
                 var body = {};

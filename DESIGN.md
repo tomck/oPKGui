@@ -412,6 +412,21 @@ re-accepting the new certificate; grids loaded correctly after that. **Expect to
 one-time step after every reinstall until `SPK_VERS`/`SPK_REV` actually changes between
 installs** (an upgrade, as opposed to a same-version reinstall, may not hit this — untested).
 
+**The create call itself then failed with error 117** (an undocumented, API-specific code).
+Rather than keep guessing at what field was wrong, made a real throwaway task through DSM's
+actual "Create" dialog (`opkgui-schema-test`, deleted immediately after) with the same
+`Ext.Ajax` hook capturing the real request. This revealed two things a first attempt got
+wrong from the edit-form's field *names* alone: the script content field for `create` is
+actually **`operation`** (with a separate **`operation_type: "script"`**), not `script` —
+and **every parameter value is individually `JSON.stringify`'d** before being sent (`owner`
+is the literal string `{"0":"root"}`, not a bare `0` or `"root"`). Fixed `opkgui.js` to match
+exactly. One incidental finding along the way: clicking a button that triggers our own
+`confirm()` via Claude in Chrome's automated click freezes the extension's CDP connection to
+that tab entirely (native JS dialogs block further automation) — the user had to click
+"OK" themselves each time; a real limitation of that tool combination, not a bug in oPKGui.
+**Rebuilt with the corrected schema, not yet re-tested live** — that's the next step, and
+per the note above, will also need the HTTPS cert re-accepted again after this reinstall.
+
 ## Non-goals for v0 (unchanged from the handoff doc)
 
 - No install/remove/upgrade actions.
