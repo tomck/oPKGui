@@ -304,11 +304,29 @@ to another origin *is* allowed — only framing is blocked. Rewrote `opkgui.js` 
 iframe entirely and build real ExtJS 3.x grid widgets (`Ext.grid.GridPanel` +
 `Ext.data.JsonStore`, modeled on the real patterns already confirmed working in Git's own
 code: `RowSelectionModel`, `cellclick`-based row actions, a `tbar` search filter) calling
-oPKGui's existing JSON API directly via `Ext.Ajax`/`Ext.data.JsonStore`'s `url` config. Added
-CORS headers (`withCORS` in `main.go`) so the cross-port XHR is actually readable by the
-page, not just sent. This ends up closer to a real native package-manager UI than the
-iframe wrapper would have been — ironic, given it was forced by a restriction rather than
-chosen up front. **Rebuilt, not yet tested live** — that's the next step.
+oPKGui's existing JSON API. Added CORS headers (`withCORS` in `main.go`) so the cross-port
+XHR is actually readable by the page, not just sent. This ends up closer to a real native
+package-manager UI than the iframe wrapper would have been — ironic, given it was forced by
+a restriction rather than chosen up front.
+
+**First live test of the grid UI**: real progress — an actual embedded DSM window rendered,
+with correct title bar, tabs, toolbar, and column headers. But every grid was empty. `curl`
+confirmed the backend and CORS headers were both fine, and the rest of the UI clearly
+constructed without a fatal JS error, which narrowed it to the data-loading path
+specifically. Best available explanation without live browser access: `Ext.data.JsonStore`'s
+built-in transport routes through the shared, page-wide `Ext.Ajax` singleton, which DSM's
+own code very likely configures with its own defaults (headers, possibly a CSRF token) —
+since that's shared state, DSM's own config would silently apply to our cross-origin calls
+too, plausibly tripping a CORS preflight our simple server-side config doesn't cover, with
+`Ext.data`'s error handling swallowing the failure quietly.
+
+Rewrote the networking layer to bypass `Ext.Ajax`/`Ext.data`'s transport entirely: a raw,
+isolated `XMLHttpRequest` helper (`httpRequest`) fetches JSON manually and feeds it into an
+otherwise-unwired `Ext.data.JsonStore` via `loadData()`, for both reads and the POST mutate
+calls. This has no dependency on whatever DSM's global `Ext.Ajax` defaults happen to be.
+**Rebuilt, not yet re-tested live** — that's the next step; if grids are still empty after
+this, the actual browser console/network tab will be needed (no Claude-in-Chrome connection
+in this session to inspect it directly).
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 

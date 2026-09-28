@@ -3,15 +3,21 @@
  *
  * Real ExtJS 3.x widgets (SYNOCOMMUNITY.OPKGui.* namespace, extending
  * SYNO.SDS.AppInstance/AppWindow -- the documented third-party pattern,
- * see DESIGN.md's Round 9), calling oPKGui's own existing Go HTTP service
- * via Ext.Ajax/Ext.data.JsonStore.
+ * see DESIGN.md's Round 9), calling oPKGui's own existing Go HTTP service.
  *
  * NOT an iframe: DSM's own page sends a Content-Security-Policy with
  * frame-src restricted to 'self' (confirmed by reading the actual
  * response header), which blocks framing anything off-origin no matter
  * what TLS/cert setup the target has. connect-src is unrestricted
- * though, so plain XHR to another port works fine -- hence real grid
- * widgets instead of wrapping the existing HTML page in an iframe.
+ * though, so plain XHR to another port works fine.
+ *
+ * NOT Ext.Ajax/Ext.data's built-in transport, either: that's a shared,
+ * page-wide singleton DSM's own code configures (default headers,
+ * possibly a CSRF token, etc.) -- since it's shared, DSM's own config
+ * would silently apply to our cross-origin calls too and could trip a
+ * CORS preflight our simple server-side config doesn't cover. Using a
+ * raw, isolated XMLHttpRequest here avoids depending on whatever DSM's
+ * global AJAX defaults happen to be.
  */
 Ext.ns("SYNOCOMMUNITY.OPKGui");
 
@@ -22,36 +28,46 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
     var allowSystemDup = false;
     var grids = [];
 
+    function httpRequest(method, url, cb) {
+        var xhr = new XMLHttpRequest();
+        xhr.open(method, url, true);
+        if (method === "POST") {
+            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+        }
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) return;
+            var body = null;
+            try { body = JSON.parse(xhr.responseText); } catch (e) {}
+            cb(xhr.status >= 200 && xhr.status < 300, body, xhr.status);
+        };
+        xhr.onerror = function() { cb(false, null, 0); };
+        xhr.send();
+    }
+
     function reloadAll() {
-        Ext.each(grids, function(g) { g.opkguiStore.reload(); });
+        Ext.each(grids, function(g) { g.opkguiLoad(); });
     }
 
     function actionCall(verb, name, cb) {
-        Ext.Ajax.request({
-            url: BASE + "/api/action?action=" + verb + "&pkg=" + encodeURIComponent(name),
-            method: "POST",
-            headers: { "X-Requested-With": "XMLHttpRequest" },
-            success: function(resp) {
-                var body = {};
-                try { body = Ext.decode(resp.responseText); } catch (e) {}
-                cb(true, body);
-            },
-            failure: function(resp) {
-                var body = {};
-                try { body = Ext.decode(resp.responseText); } catch (e) {}
-                cb(false, body);
-            }
-        });
+        httpRequest("POST", BASE + "/api/action?action=" + verb + "&pkg=" + encodeURIComponent(name), cb);
     }
 
     function makeGrid(cfg) {
         var store = new Ext.data.JsonStore({
-            url: BASE + "/api?action=" + cfg.action,
             root: "packages",
             idProperty: "name",
-            fields: ["name", "version", "new_version", "desc", "system_dup"],
-            autoLoad: true
+            fields: ["name", "version", "new_version", "desc", "system_dup"]
         });
+
+        function load() {
+            httpRequest("GET", BASE + "/api?action=" + cfg.action, function(ok, body) {
+                if (!ok || !body) {
+                    alert("Failed to load " + cfg.title + (body && body.error ? ": " + body.error : " (request failed)"));
+                    return;
+                }
+                store.loadData(body);
+            });
+        }
 
         var columns = [{ header: "Package", dataIndex: "name", width: 220 }];
 
@@ -93,7 +109,7 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
                     if (!confirm(cfg.buttonText + ' "' + name + '"?')) return;
                     actionCall(cfg.actionVerb, name, function(ok, body) {
                         if (!ok) {
-                            alert((body.error || "request failed") + (body.output ? "\n" + body.output.join("\n") : ""));
+                            alert((body && body.error || "request failed") + (body && body.output ? "\n" + body.output.join("\n") : ""));
                             return;
                         }
                         reloadAll();
@@ -132,8 +148,9 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
         }
 
         var grid = new Ext.grid.GridPanel(gridConfig);
-        grid.opkguiStore = store;
+        grid.opkguiLoad = load;
         grid.opkguiAction = cfg.action;
+        load();
         return grid;
     }
 
