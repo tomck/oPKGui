@@ -25,6 +25,19 @@ First run clones `spksrc` (shallow, gitignored at `.spksrc/`) and pulls
 `TCVERSION=7.2 ./build.sh` etc. if targeting a different DSM major/minor floor (default
 `7.1`).
 
+## After every reinstall: re-accept the HTTPS certificate
+
+oPKGui generates a self-signed TLS cert on first run and persists it in the package's `var`
+directory (see `tls.go`) — but reinstalling at the **same** `SPK_VERS`/`SPK_REV` (which every
+round in this project's history has done so far) appears to reset that directory, generating
+a **new** cert each time. Your browser's earlier "proceed anyway" exception was tied to the
+old cert's fingerprint, so it silently stops applying — and since the DSM window loads data
+via background XHR, not page navigation, there's no visible warning, just grids failing with
+"request failed."
+
+**Fix**: after every reinstall, visit `https://<hostname>:18891/` directly once and click
+through the new certificate warning, *before* opening oPKGui's window from the Main Menu.
+
 ## Install
 
 1. Copy the `.spk` from `dist/` to a machine that can reach your NAS's DSM web UI.

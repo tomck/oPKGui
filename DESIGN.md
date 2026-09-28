@@ -395,8 +395,22 @@ AppWindow calling `SYNO.Core.EventScheduler.create` with the same script content
 to DSM's own same-origin webapi, and DSM's own code globally hooks `Ext.Ajax` to attach the
 `X-SYNO-TOKEN` CSRF header, which a mutating call here actually needs (the opposite of why
 raw XHR was necessary for oPKGui's own cross-origin API). Confirms success/failure and tells
-the user to go click Run themselves — no auto-run. **Built, not yet tested live** — that's
-the next step.
+the user to go click Run themselves — no auto-run.
+
+**Live test hit an operational gotcha, not a code bug**: after reinstalling, all three grids
+failed with "request failed." Isolated with Claude in Chrome (now connected, in the desktop
+app): plain HTTP (`18890`) loaded fine with real data, but HTTPS (`18891`) showed a raw
+Chrome certificate-error interstitial instead of the page. **Reinstalling regenerates the
+self-signed TLS cert** — `pkgsrc/opkgui/src/conf/privilege`'s `run-as: package` model and
+the fact `SPK_VERS`/`SPK_REV` never changed across all these iterations means DSM likely
+treats same-version reinstalls as fresh installs, resetting the package's `var` directory
+where `tls.go` persists the cert/key. The browser's earlier "proceed anyway" exception was
+tied to the *old* cert's fingerprint, so it silently didn't apply to the new one — and since
+the grids load via background XHR, not page navigation, there was no visible warning at all,
+just silent failure. Fixed by manually re-visiting `https://<hostname>:18891/` once and
+re-accepting the new certificate; grids loaded correctly after that. **Expect to redo this
+one-time step after every reinstall until `SPK_VERS`/`SPK_REV` actually changes between
+installs** (an upgrade, as opposed to a same-version reinstall, may not hit this — untested).
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 
