@@ -150,12 +150,13 @@ through the new certificate warning, *before* opening oPKGui's window from the M
   `GOARCH`/`GOARM` itself; local macOS dev still defaults to `noarch` since real archs remain
   broken from a Mac specifically, not in CI.
 
+- **CI TCVERSION coverage:** added a `tcversion: ["7.1", "7.2"]` axis to the build matrix
+  alongside `arch`, so all four combinations (`x64`/`aarch64` × `7.1`/`7.2`) build on every
+  push. All four passed on the first run.
+
 ## What's next (v2?)
 
 - Packaging this as a self-hosted Package Center source (a JSON feed + hosted `.spk`) for
   reinstall/updates without manual sideload.
-- CI currently only builds against `TCVERSION=7.1`; some current aarch64 models (per spksrc's
-  own docs) are on the 7.2 toolchain generation -- add a `TCVERSION` axis to the CI matrix
-  before treating aarch64 coverage as complete.
 - Actually approaching SynoCommunity about distribution now that real multi-arch builds work
   end-to-end in CI (the original goal this was all in service of).

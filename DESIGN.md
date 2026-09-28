@@ -463,9 +463,8 @@ correctly refuse to install the wrong package on the wrong hardware. `build.sh` 
 `GOARCH`/`GOARM` itself; local macOS dev still defaults to `noarch` since real archs remain
 broken from a Mac specifically, not from a structural limit.
 
-**Still open**: CI only builds against `TCVERSION=7.1` so far; some current aarch64 models
-are on the 7.2 toolchain generation per spksrc's own docs — needs a `TCVERSION` axis added
-to the matrix before aarch64 coverage is treated as complete.
+**Closed the same day**: added a `tcversion: ["7.1", "7.2"]` axis to the CI matrix alongside
+`arch`. All four combinations built clean on the first run.
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 
