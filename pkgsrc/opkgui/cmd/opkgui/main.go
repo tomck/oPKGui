@@ -49,6 +49,17 @@ var mutateSubcommands = map[string]string{
 
 var packageNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9.+-]*$`)
 
+// protectedPackages can never be removed via the UI -- opkg needs itself
+// to manage anything else, and the entware-* packages are Entware's own
+// bootstrap identity. Removing any of these breaks opkg/Entware entirely.
+// (Prompted by a real near-miss: a misclick almost removed opkg itself.)
+var protectedPackages = map[string]bool{
+	"opkg":            true,
+	"entware-opt":     true,
+	"entware-release": true,
+	"entware-upgrade": true,
+}
+
 // systemBinDirs are checked to flag packages that likely duplicate a
 // command DSM/BusyBox already provides outside of Entware's own /opt tree
 // (e.g. installing Entware's `bash` alongside the system's own /bin/bash).
@@ -293,6 +304,10 @@ func mutateHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("pkg")
 	if !packageNameRE.MatchString(name) {
 		writeError(w, http.StatusBadRequest, "invalid package name")
+		return
+	}
+	if action == "remove" && protectedPackages[name] {
+		writeError(w, http.StatusForbidden, "refusing to remove "+name+" -- opkg/Entware need it to function")
 		return
 	}
 	// install targets come from the available list; remove/upgrade targets

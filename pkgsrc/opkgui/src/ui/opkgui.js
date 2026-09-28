@@ -135,6 +135,7 @@ Ext.ns("SYNOCOMMUNITY.OPKGui");
                     xtype: "textfield",
                     emptyText: "Filter by name...",
                     width: 180,
+                    enableKeyEvents: true,
                     listeners: {
                         keyup: function(f) {
                             var v = f.getValue().toLowerCase();

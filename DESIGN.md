@@ -324,9 +324,22 @@ Rewrote the networking layer to bypass `Ext.Ajax`/`Ext.data`'s transport entirel
 isolated `XMLHttpRequest` helper (`httpRequest`) fetches JSON manually and feeds it into an
 otherwise-unwired `Ext.data.JsonStore` via `loadData()`, for both reads and the POST mutate
 calls. This has no dependency on whatever DSM's global `Ext.Ajax` defaults happen to be.
-**Rebuilt, not yet re-tested live** — that's the next step; if grids are still empty after
-this, the actual browser console/network tab will be needed (no Claude-in-Chrome connection
-in this session to inspect it directly).
+
+**The raw-XHR fix worked.** Confirmed live: grids populate, remove and install both work
+end-to-end (tested by removing and reinstalling `cal`) inside the real embedded DSM window.
+oPKGui's embedded-window goal (originally Round 6, closed as a dead end, reopened by the
+user's pushback in Round 9) is done.
+
+Two small bugs found in that same test round, both fixed:
+- **Search filter did nothing.** Classic ExtJS 3.x gotcha: `Ext.form.TextField` only fires
+  `keyup`/`keydown`/`keypress` if `enableKeyEvents: true` is explicitly set (defaults to
+  `false`) — the listener was silently never firing at all. Added the flag.
+- **Near-miss: almost removed `opkg` itself** via the grid's Remove action (misclick, caught
+  before confirming). Removing `opkg` or Entware's own `entware-*` bootstrap packages would
+  break the tool (and Entware) entirely. Added a small server-side guard
+  (`protectedPackages` in `main.go`) that refuses to remove any of them, independent of the
+  UI — the same "defense in depth, don't rely on the frontend alone" principle as the
+  package-name validation from Round 7.
 
 ## Non-goals for v0 (unchanged from the handoff doc)
 
