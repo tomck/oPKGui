@@ -15,7 +15,7 @@ DESCRIPTION = Browse, install, remove and upgrade Entware (opkg) packages.
 DISPLAY_NAME = oPKGui
 CHANGELOG = "v1: install/remove/upgrade, system-command-conflict warnings"
 
-LICENSE = MIT
+LICENSE = GPLv2
 
 CONF_DIR = src/conf/
 

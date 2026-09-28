@@ -58,4 +58,5 @@ reasoning and every dead end tried along the way is in [`DESIGN.md`](DESIGN.md).
 
 ## License
 
-[MIT](LICENSE)
+[GPL-2.0](LICENSE) — matching the license of [Entware](https://github.com/Entware/Entware),
+which this project depends on.
